@@ -57,44 +57,79 @@ class Image(object):
         pass
 
     def plot_label(self):
-        print(self.image.shape)
         temp = self.image.copy()
         for obj in self.objects:
             temp = cv2.rectangle(temp, obj[0], obj[1], 255, 1)
         fig = plt.imshow(temp, vmin=0, vmax=255)
         return fig
-        
 
-height = 300
-width = 640
+    def sliding_window(self, window_size, pad_h, pad_v):
+        windows_h = (self.width - window_size) // pad_h + 1
+        windows_v = (self.height - window_size) // pad_v + 1
+        crops = np.zeros((windows_v, windows_h, window_size, window_size))
+        labels = np.zeros((windows_v, windows_h))
+        for j in range(windows_v):
+            y_top = j*pad_v
+            y_bottom = j*pad_v + window_size
+            for i in range(windows_h):
+                x_top = i*pad_h
+                x_bottom = i*pad_h + window_size
+                crop = self.image[y_top:y_bottom, x_top:x_bottom]
+                crops[j,i,:,:] = crop
+                mask_crop = self.mask[y_top:y_bottom, x_top:x_bottom]
+                # if mask_crop[mask_crop>0].size > 510:
+                #     labels[j,i] = 1
+                labels[j,i] = mask_crop[mask_crop>0].size
+        return crops, labels
 
-train = Image(height, width)
+def main():
+    height = 300
+    width = 640
 
-starting_point = [300, 20]
-spacing = 15
-length = 12
-lines = 15
+    train = Image(height, width)
 
-train.add_object(starting_point, spacing, length, lines)
-train.plot_label()
-plt.savefig('train')
+    starting_point = [300, 20]
+    spacing = 15
+    length = 12
+    lines = 15
 
-# Image test
-test = Image(300)
+    train.add_object(starting_point, spacing, length, lines)
+    train.plot_label()
+    plt.savefig('train')
 
-# Premier objet
-starting_point = [150, 20]
-spacing = 10
-length = 10
-lines = 8
-test.add_object(starting_point, spacing, length, lines)
+    # Image test
+    test = Image(300)
 
-# Deuxième objet
-starting_point = [350, 200]
-spacing = 6
-length = 5
-lines = 8
-test.add_object(starting_point, spacing, length, lines)
+    # Premier objet
+    starting_point = [150, 20]
+    spacing = 10
+    length = 10
+    lines = 8
+    test.add_object(starting_point, spacing, length, lines)
 
-fig = test.plot_label()
-plt.savefig('test')
+    # Deuxième objet
+    starting_point = [350, 200]
+    spacing = 6
+    length = 5
+    lines = 8
+    test.add_object(starting_point, spacing, length, lines)
+
+    fig = test.plot_label()
+    plt.savefig('test')
+
+    pad_h = 8
+    pad_v = 4
+    window_size = 32
+
+    crops, labels = train.sliding_window(window_size, pad_h, pad_v)
+
+    plt.imshow(crops[crops.shape[0]//2-2,crops.shape[1]//2-1])
+    labels /= labels.max()
+    plt.imshow(labels)
+    plt.savefig('crop')
+
+    resize = resize_labels(labels, pad_h, pad_v, window_size, (height,width))
+    compare_labels(train.mask, resize, pad_h, pad_v, height, width)
+    plt.savefig('compare')
+if __name__ == "__main__":
+    main()
