@@ -45,7 +45,7 @@ def main():
     plt.imshow(labels)
     plt.savefig('crop')
 
-    compare_labels(train.mask, labels, pad_h, pad_v, window_size, width, height)
+    train.compare_labels(labels, pad_h, pad_v, window_size)
     plt.savefig('compare')
 
 if __name__ == "__main__":

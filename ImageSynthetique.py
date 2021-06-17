@@ -95,6 +95,39 @@ class Image(object):
                 labels[j,i] = mask_crop[mask_crop>0].size
         return crops, labels
 
+    def compare_labels(self, resampled_labels, pad_h, pad_v, window_size):
+        new_labels = resize_labels(resampled_labels, pad_h, pad_v, window_size, (self.height,self.width))
+        fig = plt.figure()
+        ax = fig.gca()
+        ax.tick_params(
+            which='major',      # both major and minor ticks are affected
+            bottom=False,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            left=False,
+            labelbottom=False,
+            labelleft=False,
+            grid_color='black',
+            grid_alpha=0.3)
+        ax.tick_params(
+            which='minor',      # both major and minor ticks are affected
+            bottom=False,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            left=False,
+            grid_color='black',
+            grid_alpha=0.1)
+        ax.set_xticks(np.arange(0, self.width, pad_h), minor=True)
+        ax.set_yticks(np.arange(0, self.height, pad_v), minor=True)
+        ax.set_xticks(np.arange(0, self.width, pad_h*4))
+        ax.set_yticks(np.arange(0, self.height, pad_v*4))
+
+        plt.imshow(self.mask, vmin=0, vmax=255)
+        plt.imshow(new_labels, vmin=0, vmax=1, alpha=0.5)
+        # And a corresponding grid
+        ax.grid(which='both')
+        #ax.grid(which='minor', alpha=0.5, color='black')
+        #ax.grid(which='major', alpha=0.5, color='black')
+        pass
+
 
 def noisy(image, height):
     row,col= image.shape
@@ -125,36 +158,3 @@ def resize_labels(labels, pad_h, pad_v, window_size, shape):
         end = tuple(pair*[pad_h,pad_v] + [0, window_size])
         cv2.rectangle(labels_resize, start, end, 1, -1)
     return labels_resize
-
-def compare_labels(true_labels, resampled_labels, pad_h, pad_v, window_size, width, height):
-    new_labels = resize_labels(resampled_labels, pad_h, pad_v, window_size, (height,width))
-    fig = plt.figure()
-    ax = fig.gca()
-    ax.tick_params(
-        which='major',      # both major and minor ticks are affected
-        bottom=False,      # ticks along the bottom edge are off
-        top=False,         # ticks along the top edge are off
-        left=False,
-        labelbottom=False,
-        labelleft=False,
-        grid_color='black',
-        grid_alpha=0.3)
-    ax.tick_params(
-        which='minor',      # both major and minor ticks are affected
-        bottom=False,      # ticks along the bottom edge are off
-        top=False,         # ticks along the top edge are off
-        left=False,
-        grid_color='black',
-        grid_alpha=0.1)
-    ax.set_xticks(np.arange(0, width, pad_h), minor=True)
-    ax.set_yticks(np.arange(0, height, pad_v), minor=True)
-    ax.set_xticks(np.arange(0, width, pad_h*4))
-    ax.set_yticks(np.arange(0, height, pad_v*4))
-
-    plt.imshow(true_labels, vmin=0, vmax=255)
-    plt.imshow(new_labels, vmin=0, vmax=1, alpha=0.5)
-    # And a corresponding grid
-    ax.grid(which='both')
-    #ax.grid(which='minor', alpha=0.5, color='black')
-    #ax.grid(which='major', alpha=0.5, color='black')
-    pass
