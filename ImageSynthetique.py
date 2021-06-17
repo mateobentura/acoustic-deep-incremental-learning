@@ -12,7 +12,7 @@ plt.rcParams.update(params)
 
 import cv2
 
-class Image(object):
+class Image:
     """docstring for ."""
 
     def __init__(self, height, width=640):
@@ -35,7 +35,6 @@ class Image(object):
         starting_pt = np.array(starting_pt)*times
         spacing *= times
         length *= times
-        lines = 15
 
         start = np.array(starting_pt - [length // 2, 0])
         rect_top = tuple(start//times-2)
@@ -96,7 +95,7 @@ class Image(object):
         return crops, labels
 
     def compare_labels(self, resampled_labels, pad_h, pad_v, window_size):
-        new_labels = resize_labels(resampled_labels, pad_h, pad_v, window_size, (self.height,self.width))
+        new_labels = self.resize_labels(resampled_labels, pad_h, pad_v, window_size)
         fig = plt.figure()
         ax = fig.gca()
         ax.tick_params(
@@ -120,13 +119,32 @@ class Image(object):
         ax.set_xticks(np.arange(0, self.width, pad_h*4))
         ax.set_yticks(np.arange(0, self.height, pad_v*4))
 
+        pairs = np.array(np.where(resampled_labels>0)).transpose()[:,[1, 0]]
+        new_points = np.array([element*[pad_h,pad_v]+[window_size//2, window_size//2] for element in pairs ])
         plt.imshow(self.mask, vmin=0, vmax=255)
         plt.imshow(new_labels, vmin=0, vmax=1, alpha=0.5)
+        plt.scatter(new_points[:,0],new_points[:,1], s=1)
         # And a corresponding grid
         ax.grid(which='both')
         #ax.grid(which='minor', alpha=0.5, color='black')
         #ax.grid(which='major', alpha=0.5, color='black')
         pass
+
+    def resize_labels(self, labels, pad_h, pad_v, window_size):
+        labels_resize = np.zeros_like(self.mask, np.float32)
+
+        obj = np.array(np.where(labels>0))
+        pairs = obj.transpose()[:,[1, 0]]
+        #labels *= 255
+        # print(labels.max())
+        for pair in pairs:
+            start = tuple(pair*[pad_h,pad_v])
+            end = tuple(pair*[pad_h,pad_v] + [window_size, window_size])
+            #pair = tuple(pair)
+            pair = (pair[1], pair[0])
+            labels_resize = cv2.rectangle(labels_resize, start, end, 1, -1)
+
+        return labels_resize
 
 
 def noisy(image, height):
@@ -145,16 +163,3 @@ def noisy(image, height):
           for i in image.shape]
     out[tuple(coords)] -= height
     return out
-
-
-def resize_labels(labels, pad_h, pad_v, window_size, shape):
-    labels_resize = np.zeros(shape, dtype='uint8')
-
-    obj = np.array(np.where(labels>0))
-    pairs = obj.transpose()[:,[1, 0]]
-
-    for pair in pairs:
-        start = tuple(pair*[pad_h,pad_v] + [ window_size,0])
-        end = tuple(pair*[pad_h,pad_v] + [0, window_size])
-        cv2.rectangle(labels_resize, start, end, 1, -1)
-    return labels_resize

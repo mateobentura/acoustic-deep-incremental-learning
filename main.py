@@ -5,9 +5,9 @@ def main():
 
     train = Image(height, width)
 
-    starting_point = [300, 20]
+    starting_point = [300, 40]
     spacing = 15
-    length = 12
+    length = 14
     lines = 15
 
     train.add_object(starting_point, spacing, length, lines)
@@ -20,7 +20,7 @@ def main():
     # Premier objet
     starting_point = [150, 20]
     spacing = 10
-    length = 10
+    length = 12
     lines = 8
     test.add_object(starting_point, spacing, length, lines)
 
@@ -35,13 +35,13 @@ def main():
     plt.savefig('test')
 
     pad_h = 8
-    pad_v = 4
+    pad_v = 6
     window_size = 32
 
     crops, labels = train.sliding_window(window_size, pad_h, pad_v)
 
     plt.imshow(crops[crops.shape[0]//2-2,crops.shape[1]//2-1])
-    labels /= labels.max()
+    #labels /= labels.max()
     plt.imshow(labels)
     plt.savefig('crop')
 
