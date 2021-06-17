@@ -1,4 +1,5 @@
 from ImageSynthetique import *
+from Dataset import *
 
 def main():
     height, width = (300, 640)
@@ -41,12 +42,15 @@ def main():
     crops, labels = train.sliding_window(window_size, pad_h, pad_v)
 
     plt.imshow(crops[crops.shape[0]//2-2,crops.shape[1]//2-1])
-    #labels /= labels.max()
     plt.imshow(labels)
     plt.savefig('crop')
 
     train.compare_labels(labels, pad_h, pad_v, window_size)
     plt.savefig('compare')
+    
+    labels /= labels.max()
+    img_shape = (window_size,window_size,1)
+    ds_train, ds_val = crops_to_dataset(crops, labels, balanced=False, split=True)
 
 if __name__ == "__main__":
     main()
