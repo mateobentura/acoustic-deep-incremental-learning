@@ -6,15 +6,19 @@ params = {'legend.fontsize': 'x-large',
           'axes.titlesize':'x-large',
           'xtick.labelsize':'x-large',
           'ytick.labelsize':'x-large',
-          'figure.dpi' : 200,
+          'figure.dpi' : 150,
           'figure.constrained_layout.use': True}
 
 plt.rcParams.update(params)
-import itertools
 import time
 import cv2
 
-class Image(object):
+def timing(part='', start=None):
+    if start!=None:
+        print('Time of part '+part+':'+str(time.time()-start))
+    return time.time()
+
+class Image:
     """docstring for ."""
 
     def __init__(self, height, width=640):
@@ -27,7 +31,7 @@ class Image(object):
 
     def create_image(self):
         self.image = np.ones((self.height, self.width), np.float32) * 2
-        self.image = noisy(self.image, 10)
+        self.image = noisy(self.image, 30, 30)
         self.mask = np.zeros((self.height, self.width), np.uint8)
         pass
 
@@ -38,7 +42,6 @@ class Image(object):
         starting_pt = np.array(starting_pt)*times
         spacing *= times
         length *= times
-        lines = 15
 
         self.lines.append(np.zeros((lines,2,2)))
         start = np.array(starting_pt - [length // 2, 0])
@@ -49,8 +52,9 @@ class Image(object):
         for line in range(lines):
             intensity = np.random.randint(min_intensity,200)
             thickness = np.random.randint(times,2*times)
-            cv2.line(big_image, tuple(start), tuple(end), intensity, thickness)
-            self.lines[-1][line][:,:] = np.stack((start,end))
+            length_var = [np.random.randint(-times,times),0]
+            cv2.line(big_image, tuple(start+length_var), tuple(end-length_var), intensity, thickness)
+            self.lines[-1][line][:,:] = np.stack((start+length_var,end-length_var))
             start[1] += spacing
             end[1] += spacing
         self.lines[-1] //= times
@@ -86,86 +90,98 @@ class Image(object):
         windows_v = (self.height - window_size) // pad_v + 1
         crops = np.zeros((windows_v, windows_h, window_size, window_size))
         labels = np.zeros((windows_v, windows_h))
+        segmentation_crops = np.zeros((windows_v, windows_h, window_size, window_size))
         number = np.zeros_like(labels)
-
-        for (j, i) in itertools.product(range(windows_v),range(windows_h)):
+        for j in range(windows_v):
             y_top = j*pad_v
             y_bottom = j*pad_v + window_size
-            x_top = i*pad_h
-            x_bottom = i*pad_h + window_size
-            crop = self.image[y_top:y_bottom, x_top:x_bottom]
-            crops[j,i,:,:] = crop
-            mask_crop = self.mask[y_top:y_bottom, x_top:x_bottom]
-            # if mask_crop[mask_crop>0].size > 510:
-            #     labels[j,i] = 1
-            labels[j,i] = mask_crop[mask_crop>0].size
-            if labels[j,i] :
-                lower = ([x_top,y_top]<self.lines[-1]).any(axis=1).all(axis=1)
-                higher = (self.lines[-1]<[x_bottom,y_bottom]).any(axis=1).all(axis=1)
-                slice = np.logical_and(lower,higher)
-                number[j,i]= self.lines[-1][slice].shape[0]
+            for i in range(windows_h):
+                x_top = i*pad_h
+                x_bottom = i*pad_h + window_size
+                crop = self.image[y_top:y_bottom, x_top:x_bottom]
+                crops[j,i,:,:] = crop
+                mask_crop = self.mask[y_top:y_bottom, x_top:x_bottom]
+                # if mask_crop[mask_crop>0].size > 510:
+                #     labels[j,i] = 1
+                labels[j,i] = mask_crop[mask_crop>0].size
+                if labels[j,i] :
+                    lower = ([x_top,y_top]<self.lines[-1]).any(axis=1).all(axis=1)
+                    higher = (self.lines[-1]<[x_bottom,y_bottom]).any(axis=1).all(axis=1)
+                    slice = np.logical_and(lower,higher)
+                    number[j,i]= self.lines[-1][slice].shape[0]
 
         return crops, labels, number
 
+    def compare_labels(self, resampled_labels, pad_h, pad_v, window_size):
+        new_labels = self.resize_labels(resampled_labels, pad_h, pad_v, window_size)
 
-def noisy(image, height):
+        fig = plt.figure()
+        ax = fig.gca()
+        ax.tick_params(
+            which='major',      # both major and minor ticks are affected
+            bottom=False,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            left=False,
+            labelbottom=False,
+            labelleft=False,
+            grid_color='black',
+            grid_alpha=0.3)
+        ax.tick_params(
+            which='minor',      # both major and minor ticks are affected
+            bottom=False,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            left=False,
+            grid_color='black',
+            grid_alpha=0.1)
+        ax.set_xticks(np.arange(0, self.width, pad_h), minor=True)
+        ax.set_yticks(np.arange(0, self.height, pad_v), minor=True)
+        ax.set_xticks(np.arange(0, self.width, pad_h*4))
+        ax.set_yticks(np.arange(0, self.height, pad_v*4))
+
+        plt.imshow(self.mask, vmin=0, vmax=255)
+        plt.imshow(new_labels, vmin=0, vmax=1, alpha=0.5)
+
+        # pairs = np.array(np.where(resampled_labels>0)).transpose()[:,[1, 0]]
+        # new_points = np.array([element*[pad_h,pad_v]+[window_size//2, window_size//2] for element in pairs ])
+        # plt.scatter(new_points[:,0],new_points[:,1], s=1)
+        # And a corresponding grid
+        ax.grid(which='both')
+        #ax.grid(which='minor', alpha=0.5, color='black')
+        #ax.grid(which='major', alpha=0.5, color='black')
+        pass
+
+    def resize_labels(self, labels, pad_h, pad_v, window_size):
+        labels_resize = np.zeros_like(self.mask, np.float32)
+
+        obj = np.array(np.where(labels>0))
+        pairs = obj.transpose()[:,[1, 0]]
+        #labels *= 255
+        # print(labels.max())
+        for pair in pairs:
+            start = tuple(pair*[pad_h,pad_v])
+            end = tuple(pair*[pad_h,pad_v] + [window_size, window_size])
+            #pair = tuple(pair)
+            pair = (pair[1], pair[0])
+            labels_resize = cv2.rectangle(labels_resize, start, end, 1, -1)
+
+        return labels_resize
+
+
+def noisy(image, height, intensity):
     row,col= image.shape
-    s_vs_p = 0.5
-    amount = 0.08
     out = np.copy(image)
-    # Salt mode
-    num_salt = np.ceil(amount * image.size * s_vs_p)
-    coords = [np.random.randint(0, i - 1, int(num_salt))
-          for i in image.shape]
-    out[tuple(coords)] += height
-    # Pepper mode
-    num_pepper = np.ceil(amount* image.size * (1. - s_vs_p))
-    coords = [np.random.randint(0, i - 1, int(num_pepper))
-          for i in image.shape]
-    out[tuple(coords)] -= height
+    # s_vs_p = 0.5
+    # amount = 0.1
+    # # Salt mode
+    # num_salt = np.ceil(amount * image.size * s_vs_p)
+    # coords = [np.random.randint(0, i - 1, int(num_salt))
+    #       for i in image.shape]
+    # out[tuple(coords)] += height
+    # # Pepper mode
+    # num_pepper = np.ceil(amount* image.size * (1. - s_vs_p))
+    # coords = [np.random.randint(0, i - 1, int(num_pepper))
+    #       for i in image.shape]
+    # out[tuple(coords)] -= height
+    random = np.round(np.random.rand(row, col) * intensity)
+    out += random
     return out
-
-
-def resize_labels(labels, pad_h, pad_v, window_size, shape):
-  labels_resize = np.zeros(shape, dtype='uint8')
-
-  obj = np.array(np.where(labels>0))
-  pairs = obj.transpose()[:,[1, 0]]
-
-  for pair in pairs:
-    start = tuple(pair*[pad_h,pad_v] + [ window_size,0])
-    end = tuple(pair*[pad_h,pad_v] + [0, window_size])
-    cv2.rectangle(labels_resize, start, end, 1, -1)
-  return labels_resize
-
-def compare_labels(true_labels, sampled_labels, pad_h, pad_v, width, height):
-  fig = plt.figure()
-  ax = fig.gca()
-  ax.tick_params(
-    which='major',      # both major and minor ticks are affected
-    bottom=False,      # ticks along the bottom edge are off
-    top=False,         # ticks along the top edge are off
-    left=False,
-    labelbottom=False,
-    labelleft=False,
-    grid_color='black',
-    grid_alpha=0.3)
-  ax.tick_params(
-    which='minor',      # both major and minor ticks are affected
-    bottom=False,      # ticks along the bottom edge are off
-    top=False,         # ticks along the top edge are off
-    left=False,
-    grid_color='black',
-    grid_alpha=0.1)
-  ax.set_xticks(np.arange(0, width, pad_h), minor=True)
-  ax.set_yticks(np.arange(0, height, pad_v), minor=True)
-  ax.set_xticks(np.arange(0, width, pad_h*4))
-  ax.set_yticks(np.arange(0, height, pad_v*4))
-
-  plt.imshow(true_labels, vmin=0, vmax=255)
-  plt.imshow(sampled_labels, vmin=0, vmax=1, alpha=0.5)
-  # And a corresponding grid
-  ax.grid(which='both')
-  #ax.grid(which='minor', alpha=0.5, color='black')
-  #ax.grid(which='major', alpha=0.5, color='black')
-  pass
