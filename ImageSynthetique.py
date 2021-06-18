@@ -9,8 +9,13 @@ params = {'legend.fontsize': 'x-large',
           'figure.dpi' : 200}
 
 plt.rcParams.update(params)
-
+import time
 import cv2
+
+def timing(part='', start=None):
+    if start!=None:
+        print('Time of part '+part+':'+str(time.time()-start))
+    return time.time()
 
 class Image:
     """docstring for ."""
@@ -24,7 +29,7 @@ class Image:
 
     def create_image(self):
         self.image = np.ones((self.height, self.width), np.float32) * 2
-        self.image = noisy(self.image, 10)
+        self.image = noisy(self.image, 30, 30)
         self.mask = np.zeros((self.height, self.width), np.uint8)
         pass
 
@@ -96,6 +101,7 @@ class Image:
 
     def compare_labels(self, resampled_labels, pad_h, pad_v, window_size):
         new_labels = self.resize_labels(resampled_labels, pad_h, pad_v, window_size)
+
         fig = plt.figure()
         ax = fig.gca()
         ax.tick_params(
@@ -119,11 +125,12 @@ class Image:
         ax.set_xticks(np.arange(0, self.width, pad_h*4))
         ax.set_yticks(np.arange(0, self.height, pad_v*4))
 
-        pairs = np.array(np.where(resampled_labels>0)).transpose()[:,[1, 0]]
-        new_points = np.array([element*[pad_h,pad_v]+[window_size//2, window_size//2] for element in pairs ])
         plt.imshow(self.mask, vmin=0, vmax=255)
         plt.imshow(new_labels, vmin=0, vmax=1, alpha=0.5)
-        plt.scatter(new_points[:,0],new_points[:,1], s=1)
+
+        # pairs = np.array(np.where(resampled_labels>0)).transpose()[:,[1, 0]]
+        # new_points = np.array([element*[pad_h,pad_v]+[window_size//2, window_size//2] for element in pairs ])
+        # plt.scatter(new_points[:,0],new_points[:,1], s=1)
         # And a corresponding grid
         ax.grid(which='both')
         #ax.grid(which='minor', alpha=0.5, color='black')
@@ -147,7 +154,7 @@ class Image:
         return labels_resize
 
 
-def noisy(image, height):
+def noisy(image, height, intensity):
     row,col= image.shape
     s_vs_p = 0.5
     amount = 0.08
@@ -158,8 +165,9 @@ def noisy(image, height):
           for i in image.shape]
     out[tuple(coords)] += height
     # Pepper mode
-    num_pepper = np.ceil(amount* image.size * (1. - s_vs_p))
-    coords = [np.random.randint(0, i - 1, int(num_pepper))
-          for i in image.shape]
-    out[tuple(coords)] -= height
+    # num_pepper = np.ceil(amount* image.size * (1. - s_vs_p))
+    # coords = [np.random.randint(0, i - 1, int(num_pepper))
+    #       for i in image.shape]
+    # out[tuple(coords)] -= height
+    out += np.random.randint(0, intensity)
     return out
