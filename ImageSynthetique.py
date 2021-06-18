@@ -33,6 +33,7 @@ class Image:
         self.image = np.ones((self.height, self.width), np.float32) * 2
         self.image = noisy(self.image, 30, 30)
         self.mask = np.zeros((self.height, self.width), np.uint8)
+        self.segmentation = self.mask.copy()
         pass
 
     def add_object(self, starting_pt, spacing, length, lines):
@@ -63,9 +64,9 @@ class Image:
 
         image_resize = cv2.resize(big_image,(self.width,self.height))
         #image_resize = cv2.GaussianBlur(image_resize,(5,5),0.6)
-        self.segmentation = image_resize.copy().astype(np.uint8)
-        _, self.segmentation = cv2.threshold(self.segmentation, min_intensity, 255, cv2.THRESH_BINARY)
-        mask_2 = self.segmentation + image_resize.astype(np.uint8)
+        mask_2 = image_resize.copy().astype(np.uint8)
+        _, mask_2 = cv2.threshold(mask_2, min_intensity, 255, cv2.THRESH_BINARY)
+        self.segmentation += mask_2
         mask_2 = cv2.bitwise_not(mask_2)
 
         self.image = cv2.bitwise_and(self.image, self.image, mask = mask_2)
@@ -109,8 +110,10 @@ class Image:
                     higher = (self.lines[-1]<[x_bottom,y_bottom]).any(axis=1).all(axis=1)
                     slice = np.logical_and(lower,higher)
                     number[j,i]= self.lines[-1][slice].shape[0]
+                    segmentation_crop = self.segmentation[y_top:y_bottom, x_top:x_bottom]
+                    segmentation_crops[j,i,:,:] = segmentation_crop
 
-        return crops, labels, number
+        return crops, labels, number, segmentation_crops
 
     def compare_labels(self, resampled_labels, pad_h, pad_v, window_size):
         new_labels = self.resize_labels(resampled_labels, pad_h, pad_v, window_size)

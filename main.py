@@ -34,11 +34,14 @@ def main():
     pad_h = 16
     pad_v = 4
 
-    crops, labels, number = train.sliding_window(window_size, pad_h, pad_v)
+    crops, labels, number, segmentation_crops = train.sliding_window(window_size, pad_h, pad_v)
     var_time = timing('sliding_window', var_time)
 
-    plt.imshow(crops[crops.shape[0]//2-2,crops.shape[1]//2-1])
-    plt.imshow(labels)
+    indexes = (20//pad_v,50//pad_h-1)
+    plt.subplot(121)
+    plt.imshow(crops[indexes])
+    plt.subplot(122)
+    plt.imshow(segmentation_crops[indexes])
     plt.savefig('crop')
 
     train.compare_labels(labels, pad_h, pad_v, window_size)
