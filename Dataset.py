@@ -56,7 +56,7 @@ def crops_to_dataset(crops, labels, balanced=True, split=False, shuffle=True):
 def define_model(img_shape, fine_tune_layers=0, dropout=False):
     base_model = keras.applications.ResNet50(
       weights="imagenet",  # Load weights pre-trained on ImageNet.
-      input_shape=(img_shape[0],img_shape[0],3),
+      input_shape=(32,32,3),
       include_top=False,
     )  # Do not include the ImageNet classifier at the top.
 
@@ -69,9 +69,11 @@ def define_model(img_shape, fine_tune_layers=0, dropout=False):
 
     # Create new model on top
     inputs = keras.Input(shape=img_shape)
-    #x = keras.layers.experimental.preprocessing.Resizing(48,48)(x)
+    x = inputs
+    if img_shape[0] != 32:
+        x = keras.layers.experimental.preprocessing.Resizing(32,32)(x)
     # Convolve to adapt to 3-channel input
-    x = keras.layers.Conv2D(3,(3,3), padding='same')(inputs)
+    x = keras.layers.Conv2D(3,(3,3), padding='same')(x)
     # Pre-processing
     x = keras.applications.resnet50.preprocess_input(x)
     # Base pre-trained model

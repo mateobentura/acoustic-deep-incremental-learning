@@ -6,7 +6,8 @@ params = {'legend.fontsize': 'x-large',
           'axes.titlesize':'x-large',
           'xtick.labelsize':'x-large',
           'ytick.labelsize':'x-large',
-          'figure.dpi' : 200}
+          'figure.dpi' : 150,
+          'figure.constrained_layout.use': True}
 
 plt.rcParams.update(params)
 import time
@@ -49,7 +50,8 @@ class Image:
         for line in range(lines):
             intensity = np.random.randint(min_intensity,200)
             thickness = np.random.randint(times,2*times)
-            cv2.line(big_image, tuple(start), tuple(end), intensity, thickness)
+            length_var = [np.random.randint(-times,times),0]
+            cv2.line(big_image, tuple(start+length_var), tuple(end-length_var), intensity, thickness)
             start[1] += spacing
             end[1] += spacing
 
@@ -60,7 +62,9 @@ class Image:
         #image_resize = cv2.GaussianBlur(image_resize,(5,5),0.6)
         mask_2 = image_resize.copy().astype(np.uint8)
         _, mask_2 = cv2.threshold(mask_2, min_intensity, 255, cv2.THRESH_BINARY)
-        mask_2 += image_resize.astype(np.uint8)
+        #mask_2 += image_resize.astype(np.uint8)
+        # plt.imshow(mask_2)
+        # plt.savefig('mask')
         mask_2 = cv2.bitwise_not(mask_2)
 
         self.image = cv2.bitwise_and(self.image, self.image, mask = mask_2)
@@ -85,6 +89,7 @@ class Image:
         windows_v = (self.height - window_size) // pad_v + 1
         crops = np.zeros((windows_v, windows_h, window_size, window_size))
         labels = np.zeros((windows_v, windows_h))
+        segmentation_crops = np.zeros((windows_v, windows_h, window_size, window_size))
         for j in range(windows_v):
             y_top = j*pad_v
             y_bottom = j*pad_v + window_size
@@ -156,18 +161,19 @@ class Image:
 
 def noisy(image, height, intensity):
     row,col= image.shape
-    s_vs_p = 0.5
-    amount = 0.08
     out = np.copy(image)
-    # Salt mode
-    num_salt = np.ceil(amount * image.size * s_vs_p)
-    coords = [np.random.randint(0, i - 1, int(num_salt))
-          for i in image.shape]
-    out[tuple(coords)] += height
-    # Pepper mode
+    # s_vs_p = 0.5
+    # amount = 0.1
+    # # Salt mode
+    # num_salt = np.ceil(amount * image.size * s_vs_p)
+    # coords = [np.random.randint(0, i - 1, int(num_salt))
+    #       for i in image.shape]
+    # out[tuple(coords)] += height
+    # # Pepper mode
     # num_pepper = np.ceil(amount* image.size * (1. - s_vs_p))
     # coords = [np.random.randint(0, i - 1, int(num_pepper))
     #       for i in image.shape]
     # out[tuple(coords)] -= height
-    out += np.random.randint(0, intensity)
+    random = np.round(np.random.rand(row, col) * intensity)
+    out += random
     return out
