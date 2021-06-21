@@ -12,6 +12,7 @@ params = {'legend.fontsize': 'x-large',
 plt.rcParams.update(params)
 import time
 import cv2
+import matplotlib.patches as patches
 
 def timing(part='', start=None):
     if start!=None:
@@ -71,7 +72,7 @@ class Image:
 
         self.image = cv2.bitwise_and(self.image, self.image, mask = mask_2)
         self.image = cv2.add(self.image, image_resize)
-        self.objects.append((rect_top,rect_bottom))
+        self.objects.append({'spacing': spacing//times, 'length': length//times, 'lines': lines, 'coords': (rect_top,rect_bottom)})
         pass
 
     def plot_masked(self):
@@ -80,10 +81,27 @@ class Image:
         pass
 
     def plot_label(self):
-        temp = self.image.copy()
+        fig = plt.figure()
+        plt.imshow(self.image, vmin=0, vmax=255)
         for obj in self.objects:
-            temp = cv2.rectangle(temp, obj[0], obj[1], 255, 1)
-        fig = plt.imshow(temp, vmin=0, vmax=255)
+            coords = obj['coords']
+            pt = (coords[0][0],coords[0][1])
+            w = coords[1][0] - coords[0][0]
+            h = coords[1][1] - coords[0][1]
+            plt.gca().add_patch(patches.Rectangle(pt,w,h,linewidth=1,edgecolor='r',facecolor='none'))
+            text = ''
+            for attribute in list(obj.keys())[:-1]:
+                if attribute != list(obj.keys())[-2]:
+                    text += attribute + ': '+str(obj[attribute])+'\n'
+                else:
+                    text += attribute + ': '+str(obj[attribute])
+            pad = 5
+            plt.gca().text(pt[0]+w+1+pad/2, pt[1]+pad/2, text,
+                            color='white',
+                            horizontalalignment='left',
+                            verticalalignment='top',
+                            bbox=dict(facecolor='black', alpha=0.5, pad=pad, linewidth=0))
+
         return fig
 
     def sliding_window(self, window_size, pad_h, pad_v):

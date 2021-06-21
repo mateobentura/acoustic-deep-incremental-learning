@@ -31,13 +31,13 @@ def main():
 
     # Sliding window
     window_size = 32
-    pad_h = 16
-    pad_v = 4
+    pad_h = 8
+    pad_v = 8
 
     crops, labels, number, segmentation_crops = train.sliding_window(window_size, pad_h, pad_v)
     var_time = timing('sliding_window', var_time)
 
-    indexes = (20//pad_v,50//pad_h-1)
+    indexes = (40//pad_v,50//pad_h-1)
     plt.subplot(121)
     plt.imshow(crops[indexes])
     plt.subplot(122)
