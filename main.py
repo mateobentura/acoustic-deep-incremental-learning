@@ -4,14 +4,15 @@ import sys
 
 def main():
     height, width = (300, 640)
+    threshold = float(sys.argv[2])
     var_time = timing()
     if sys.argv[1] == 'train':
         # Image test
         train = Image(height, width)
-        train.add_object(starting_pt = [100, 40],
-                        spacing = 7, length = 12,lines = 35)
+        train.add_object(starting_pt = [24*4, 25],
+                        spacing = 7, length = 12,lines = 32)
         train.add_object(starting_pt = [350, 30],
-                        spacing = 13, length = 14,lines = 22)
+                        spacing = 13, length = 12,lines = 18)
         train.plot_label()
         plt.savefig('train')
         var_time = timing('train', var_time)
@@ -21,7 +22,7 @@ def main():
         pad_h = 1
         pad_v = 1
 
-        crops, labels, number, segmentation_crops = train.sliding_window(window_size, pad_h, pad_v)
+        crops, labels, number, segmentation_crops = train.sliding_window(window_size, pad_h, pad_v, threshold)
         var_time = timing('sliding_window', var_time)
 
         indexes = (40//pad_v,50//pad_h-1)
@@ -31,7 +32,7 @@ def main():
         plt.imshow(segmentation_crops[indexes])
         plt.savefig('crop')
 
-        train.compare_labels(labels, pad_h, pad_v, window_size)
+        train.compare_labels(labels, threshold)
         var_time = timing('compare', var_time)
         plt.savefig('compare')
         var_time = timing('save', var_time)

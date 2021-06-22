@@ -72,7 +72,7 @@ class Image:
 
         self.image = cv2.bitwise_and(self.image, self.image, mask = mask_2)
         self.image = cv2.add(self.image, image_resize)
-        self.objects.append({'spacing': spacing//times, 'length': length//times, 'lines': lines, 'coords': (rect_top,rect_bottom)})
+        self.objects.append({'coords': (rect_top,rect_bottom), 'spacing': spacing//times, 'length': length//times, 'lines': lines})
         pass
 
     def plot_masked(self):
@@ -80,7 +80,7 @@ class Image:
         fig = plt.imshow(masked, vmin=0, vmax=255)
         pass
 
-    def plot_label(self):
+    def plot_label(self,with_coords=True):
         fig = plt.figure()
         plt.imshow(self.image, vmin=0, vmax=255)
         for obj in self.objects:
@@ -90,11 +90,12 @@ class Image:
             h = coords[1][1] - coords[0][1]
             plt.gca().add_patch(patches.Rectangle(pt,w,h,linewidth=1,edgecolor='r',facecolor='none'))
             text = ''
-            for attribute in list(obj.keys())[:-1]:
-                if attribute != list(obj.keys())[-2]:
-                    text += attribute + ': '+str(obj[attribute])+'\n'
+            for attribute in list(obj.keys()):
+                if with_coords and attribute == list(obj.keys())[0]:
+                    text += 'y: ('+ str(obj[attribute][0][1])+':'+str(obj[attribute][1][1])+')\n'
                 else:
-                    text += attribute + ': '+str(obj[attribute])
+                    text += attribute + ': '+str(obj[attribute])+'\n'
+            text = text[:-1]
             pad = 5
             plt.gca().text(pt[0]+w+1+pad/2, pt[1]+pad/2, text,
                             color='white',
@@ -104,13 +105,16 @@ class Image:
 
         return fig
 
-    def sliding_window(self, window_size, pad_h, pad_v):
-        windows_h = (self.width - window_size) // pad_h + 1
-        windows_v = (self.height - window_size) // pad_v + 1
+    def sliding_window(self, window_size, pad_h, pad_v, threshold):
+        self.window_size = window_size
+        self.pad_h, self.pad_v = (pad_h, pad_v)
+        windows_h = (self.width - window_size) // pad_h +1
+        windows_v = (self.height - window_size) // pad_v +1
         crops = np.zeros((windows_v, windows_h, window_size, window_size))
         labels = np.zeros((windows_v, windows_h))
         segmentation_crops = np.zeros((windows_v, windows_h, window_size, window_size))
         number = np.zeros_like(labels)
+        max = self.mask.max()
         for j in range(windows_v):
             y_top = j*pad_v
             y_bottom = j*pad_v + window_size
@@ -120,21 +124,23 @@ class Image:
                 crop = self.image[y_top:y_bottom, x_top:x_bottom]
                 crops[j,i,:,:] = crop
                 mask_crop = self.mask[y_top:y_bottom, x_top:x_bottom]
-                # if mask_crop[mask_crop>0].size > 510:
+                # if mask_crop[mask_crop>0].size > threshold:
                 #     labels[j,i] = 1
-                labels[j,i] = mask_crop[mask_crop>0].size
-                if labels[j,i] :
+                #labels[j,i] = mask_crop[mask_crop>0].size
+                if mask_crop[mask_crop>0].size:
                     lower = ([x_top,y_top]<self.lines[-1]).any(axis=1).all(axis=1)
                     higher = (self.lines[-1]<[x_bottom,y_bottom]).any(axis=1).all(axis=1)
                     slice = np.logical_and(lower,higher)
                     number[j,i]= self.lines[-1][slice].shape[0]
                     segmentation_crop = self.segmentation[y_top:y_bottom, x_top:x_bottom]
+                    if mask_crop[mask_crop>0].size > threshold*max:
+                        labels[j,i] = 1
                     segmentation_crops[j,i,:,:] = segmentation_crop
 
         return crops, labels, number, segmentation_crops
 
-    def compare_labels(self, resampled_labels, pad_h, pad_v, window_size):
-        new_labels = self.resize_labels(resampled_labels, pad_h, pad_v, window_size)
+    def compare_labels(self, resampled_labels, threshold):
+        new_labels = self.resize_labels(resampled_labels)
 
         fig = plt.figure()
         ax = fig.gca()
@@ -154,16 +160,16 @@ class Image:
             left=False,
             grid_color='black',
             grid_alpha=0.1)
-        ax.set_xticks(np.arange(0, self.width, pad_h), minor=True)
-        ax.set_yticks(np.arange(0, self.height, pad_v), minor=True)
-        ax.set_xticks(np.arange(0, self.width, pad_h*4))
-        ax.set_yticks(np.arange(0, self.height, pad_v*4))
-
+        ax.set_xticks(np.arange(0, self.width, self.pad_h), minor=True)
+        ax.set_yticks(np.arange(0, self.height, self.pad_v), minor=True)
+        ax.set_xticks(np.arange(0, self.width, self.pad_h*4))
+        ax.set_yticks(np.arange(0, self.height, self.pad_v*4))
+        plt.title('Zones labellisées, avec un seuil de '+str(threshold))
         plt.imshow(self.mask, vmin=0, vmax=255)
         plt.imshow(new_labels, vmin=0, vmax=1, alpha=0.5)
 
         # pairs = np.array(np.where(resampled_labels>0)).transpose()[:,[1, 0]]
-        # new_points = np.array([element*[pad_h,pad_v]+[window_size//2, window_size//2] for element in pairs ])
+        # new_points = np.array([element*[self.pad_h,self.pad_v]+[self.window_size//2, self.window_size//2] for element in pairs ])
         # plt.scatter(new_points[:,0],new_points[:,1], s=1)
         # And a corresponding grid
         ax.grid(which='both')
@@ -171,17 +177,14 @@ class Image:
         #ax.grid(which='major', alpha=0.5, color='black')
         pass
 
-    def resize_labels(self, labels, pad_h, pad_v, window_size):
+    def resize_labels(self, labels):
         labels_resize = np.zeros_like(self.mask, np.float32)
 
         obj = np.array(np.where(labels>0))
         pairs = obj.transpose()[:,[1, 0]]
-        #labels *= 255
-        # print(labels.max())
         for pair in pairs:
-            start = tuple(pair*[pad_h,pad_v])
-            end = tuple(pair*[pad_h,pad_v] + [window_size, window_size])
-            #pair = tuple(pair)
+            start = tuple((pair-1)*[self.pad_h,self.pad_v]+self.window_size//2+[self.pad_h//2,self.pad_v//2])
+            end = tuple((pair)*[self.pad_h,self.pad_v]+self.window_size//2+[self.pad_h//2,self.pad_v//2])
             pair = (pair[1], pair[0])
             labels_resize = cv2.rectangle(labels_resize, start, end, 1, -1)
 
@@ -191,18 +194,6 @@ class Image:
 def noisy(image, height, intensity):
     row,col= image.shape
     out = np.copy(image)
-    # s_vs_p = 0.5
-    # amount = 0.1
-    # # Salt mode
-    # num_salt = np.ceil(amount * image.size * s_vs_p)
-    # coords = [np.random.randint(0, i - 1, int(num_salt))
-    #       for i in image.shape]
-    # out[tuple(coords)] += height
-    # # Pepper mode
-    # num_pepper = np.ceil(amount* image.size * (1. - s_vs_p))
-    # coords = [np.random.randint(0, i - 1, int(num_pepper))
-    #       for i in image.shape]
-    # out[tuple(coords)] -= height
-    random = np.round(np.random.rand(row, col) * intensity)
+    random = np.round(np.random.normal(loc=intensity/2,scale=intensity/2, size=(row, col)))
     out += random
     return out
