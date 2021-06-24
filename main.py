@@ -10,9 +10,9 @@ def main():
         # Image test
         train = Image(height, width)
         train.add_object(starting_pt = [24*4, 25],
-                        spacing = 7, length = 12,lines = 32)
+                        spacing = 7, length = 12, l_var =1, lines = 32)
         train.add_object(starting_pt = [350, 30],
-                        spacing = 13, length = 12,lines = 18)
+                        spacing = 13, length = 12, l_var =1, lines = 18)
         train.plot_label()
         plt.savefig('train')
         var_time = timing('train', var_time)
@@ -48,7 +48,7 @@ def main():
         for spacing in spacings:
             pt = [47*(spacing-3), 30]
             test.add_object(starting_pt = pt,
-                        spacing = spacing, length = 12, lines = 4*(55//spacing))
+                        spacing = spacing, length = 12, l_var=2, lines = 4*(55//spacing))
 
         fig = test.plot_label()
         plt.savefig('test')

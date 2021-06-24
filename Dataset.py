@@ -1,6 +1,11 @@
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from tensorflow import keras
+import segmentation_models as sm
+
+def reshape_dataset(dataset):
+    shape = dataset.shape
+    return dataset.reshape(shape[0]*shape[1], shape[2], shape[3])
 
 def to_one_hot(image, label):
     global classes
@@ -53,7 +58,7 @@ def crops_to_dataset(crops, labels, balanced=True, split=False, shuffle=True):
         return ds.prefetch(32)
 
 
-def define_model(img_shape, fine_tune_layers=0, dropout=False):
+def classification_model(img_shape, fine_tune_layers=0, dropout=False):
     base_model = keras.applications.ResNet50(
       weights="imagenet",  # Load weights pre-trained on ImageNet.
       input_shape=(32,32,3),
@@ -92,37 +97,7 @@ def define_model(img_shape, fine_tune_layers=0, dropout=False):
     model.compile(optimizer=opt, loss=loss, metrics=['accuracy'])
     return model
 
-def segmentation_model(img_shape, fine_tune_layers=0, dropout=False):
-    base_model = keras.applications.ResNet50(
-      weights="imagenet",  # Load weights pre-trained on ImageNet.
-      input_shape=(32,32,3),
-      include_top=False,
-    )  # Do not include the ImageNet classifier at the top.
-
-    if fine_tune_layers >= 1:
-        # Freeze all the layers except for the last `fine_tune_layers`
-        for layer in base_model.layers[:-fine_tune_layers]:
-            layer.trainable =  False
-    else:
-        base_model.trainable = False
-
-    # Create new model on top
-    inputs = keras.Input(shape=img_shape)
-    x = inputs
-    if img_shape[0] != 32:
-        x = keras.layers.experimental.preprocessing.Resizing(32,32)(x)
-    # Convolve to adapt to 3-channel input
-    x = keras.layers.Conv2D(3,(3,3), padding='same')(x)
-    # Pre-processing
-    x = keras.applications.resnet50.preprocess_input(x)
-    # Base pre-trained model
-    x = base_model(x, training=False)
-    outputs = AveragePooling2D(
-        (7, 7), name='avg_pool')(x)
-    #outputs = keras.layers.Dense(1)(x)
-    model = keras.Model(inputs, outputs)
-
-    opt = keras.optimizers.SGD(learning_rate=0.001, momentum=0.9)
-    loss = keras.losses.MeanSquaredError()
-    model.compile(optimizer=opt, loss=loss, metrics=['accuracy'])
+def segmentation_model(img_shape):
+    model_2 = sm.Unet(backbone_name='resnet34', classes=1, input_shape=img_shape, encoder_freeze=True)
+    model_2.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     return model
