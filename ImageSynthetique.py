@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 params = {'legend.fontsize': 'x-large',
-          'figure.figsize': (16, 8),
+          'figure.figsize': (16, 7.5),
           'axes.labelsize': 'x-large',
           'axes.titlesize':'x-large',
           'xtick.labelsize':'x-large',
@@ -37,7 +37,7 @@ class Image:
         self.segmentation = self.mask.copy()
         pass
 
-    def add_object(self, starting_pt, spacing, length, lines):
+    def add_object(self, starting_pt, spacing, length, l_var, lines):
         times = 4
         big_image = np.zeros((self.height*times,self.width*times), np.float32)
 
@@ -52,9 +52,9 @@ class Image:
 
         min_intensity = 50
         for line in range(lines):
-            intensity = np.random.randint(min_intensity,200)
+            intensity = np.random.randint(min_intensity,220)
             thickness = np.random.randint(times,2*times)
-            length_var = [np.random.randint(-times,times),0]
+            length_var = [np.random.randint(-l_var*times,l_var*times),0]
             cv2.line(big_image, tuple(start+length_var), tuple(end-length_var), intensity, thickness)
             self.lines[-1][line][:,:] = np.stack((start+length_var,end-length_var))
             start[1] += spacing
@@ -68,11 +68,11 @@ class Image:
         mask_2 = image_resize.copy().astype(np.uint8)
         _, mask_2 = cv2.threshold(mask_2, min_intensity, 255, cv2.THRESH_BINARY)
         self.segmentation += mask_2
-        mask_2 = cv2.bitwise_not(mask_2)
-
-        self.image = cv2.bitwise_and(self.image, self.image, mask = mask_2)
+        # mask_2 = cv2.bitwise_not(mask_2)
+        #
+        # self.image = cv2.bitwise_and(self.image, self.image, mask = mask_2)
         self.image = cv2.add(self.image, image_resize)
-        self.objects.append({'coords': (rect_top,rect_bottom), 'spacing': spacing//times, 'length': length//times, 'lines': lines})
+        self.objects.append({'coords': (rect_top,rect_bottom), 'spacing': spacing//times, 'length': length//times,'length_var': l_var, 'lines': lines})
         pass
 
     def plot_masked(self):
@@ -90,18 +90,18 @@ class Image:
             h = coords[1][1] - coords[0][1]
             plt.gca().add_patch(patches.Rectangle(pt,w,h,linewidth=1,edgecolor='r',facecolor='none'))
             text = ''
-            for attribute in list(obj.keys()):
-                if with_coords and attribute == list(obj.keys())[0]:
-                    text += 'y: ('+ str(obj[attribute][0][1])+':'+str(obj[attribute][1][1])+')\n'
-                else:
-                    text += attribute + ': '+str(obj[attribute])+'\n'
-            text = text[:-1]
+            if with_coords:
+                text += 'y: ('+ str(obj['coords'][0][1])+':'+str(obj['coords'][1][1])+')\n'
+            text += 'spacing: '+str(obj['spacing'])+'\n'
+            text += 'length: '+str(obj['length'])+'±'+str(obj['length_var'])+'\n'
+            text += 'lines: '+str(obj['lines'])
             pad = 5
             plt.gca().text(pt[0]+w+1+pad/2, pt[1]+pad/2, text,
                             color='white',
                             horizontalalignment='left',
                             verticalalignment='top',
                             bbox=dict(facecolor='black', alpha=0.5, pad=pad, linewidth=0))
+        plt.colorbar(shrink=0.85, pad=0.01)
 
         return fig
 
@@ -189,6 +189,56 @@ class Image:
             labels_resize = cv2.rectangle(labels_resize, start, end, 1, -1)
 
         return labels_resize
+
+
+    def calssification_predict(self, model, ds_test, shape, threshold):
+        predicted_labels = model.predict(ds_test.batch(32))
+        predict = predicted_labels.reshape(shape)
+        predict_thr = np.where(predict > threshold, 1, 0)
+        fig = plt.figure(figsize=(20,30))
+        plt.subplot(121)
+        for obj in self.objects:
+            coords = obj['coords']
+            pt = (coords[0][0]/self.pad_h,coords[0][1]/self.pad_v)
+            h = coords[1][1] - coords[0][1]
+            h /= self.pad_v
+            text = 'spacing: '+str(obj['spacing'])
+            plt.gca().text(pt[0], pt[1]+h, text,
+                                    color='white',
+                                    horizontalalignment='center',
+                                    verticalalignment='top',
+                                    bbox=dict(facecolor='black', alpha=0.5, linewidth=0))
+
+        plt.imshow(predict,vmin=0,vmax=1)
+        plt.subplot(122)
+        plt.imshow(predict_thr,vmin=0,vmax=1)
+        plt.yticks([])
+        plt.savefig('test_predict_classif', dpi=150)
+        plt.show()
+        return predict_thr
+
+
+
+    def segmentation_predict(self, model, crops):
+        crops_reshape = np.expand_dims(reshape_dataset(crops), axis=-1)
+        crops_reshape = np.repeat(crops_reshape, 3, axis=3)
+        predicted = model.predict(crops_reshape)
+        predicted = predicted.reshape((self.height//self.window_size, self.width//self.window_size)+predicted.shape[1:3])
+        predicted_image = np.zeros_like(self.image)
+        for row in range(1,predicted.shape[0]):
+            y_top = row*self.window_size
+            y_bottom = (row+1)*self.window_size
+            for col in range(1,predicted.shape[1]):
+                x_top = col*self.window_size
+                x_bottom = (col+1)*self.window_size
+                predicted_image[y_top:y_bottom,x_top:x_bottom] = predicted[row,col]
+        plt.imshow(predicted_image)
+        plt.imshow(test.segmentation, alpha=0.5)
+        plt.xticks(np.arange(0,test.width, 32))
+        plt.yticks(np.arange(0,test.height, 32))
+        plt.grid(color='black')
+        plt.show()
+        return predicted_image
 
 
 def noisy(image, height, intensity):
