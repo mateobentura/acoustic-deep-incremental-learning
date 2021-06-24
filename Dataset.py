@@ -98,6 +98,6 @@ def classification_model(img_shape, fine_tune_layers=0, dropout=False):
     return model
 
 def segmentation_model(img_shape):
-    model_2 = sm.Unet(backbone_name='resnet34', classes=1, input_shape=img_shape, encoder_freeze=True)
-    model_2.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    model = sm.Unet(backbone_name='resnet34', classes=1, input_shape=img_shape, encoder_freeze=True)
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     return model
