@@ -242,6 +242,46 @@ class Image:
         plt.show()
         return predicted_image
 
+    def compare_predicted(self, classif_predicted, segm_predicted):
+        new_labels = self.resize_labels(classif_predicted)
+
+        fig = plt.figure()
+        ax = fig.gca()
+        ax.tick_params(
+            which='major',      # both major and minor ticks are affected
+            bottom=False,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            left=False,
+            labelbottom=False,
+            labelleft=False,
+            grid_color='black',
+            grid_alpha=0.3)
+        ax.tick_params(
+            which='minor',      # both major and minor ticks are affected
+            bottom=False,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            left=False,
+            grid_color='black',
+            grid_alpha=0.1)
+
+        ax.set_xticks(np.arange(0, self.width, self.pad_h*4))
+        ax.set_yticks(np.arange(0, self.height, self.pad_v*4))
+
+        new_labels[segm_predicted>0] = 2.0
+        t = 1 ## alpha value
+        cmap = {0:[1.,1.0,1.0,t],1:[0.3,0.3,1.0,t],2:[0.5,0.1,0.3,t]}
+        labels = {0:'',1:'Masque de classification',2:'Masque de segmentation'}
+        arrayShow = np.array([[cmap[i] for i in j] for j in new_labels])
+        cmap = {1: cmap[1],2:cmap[2]}
+        ## create patches as legend
+        patches =[mpatches.Patch(color=cmap[i],label=labels[i]) for i in cmap]
+        # plt.imshow(segm)
+        plt.imshow(arrayShow)
+        plt.legend(handles=patches, loc=4, borderaxespad=0.)
+
+        ax.grid(which='both')
+        pass
+
 
 def noisy(image, height, intensity):
     row,col= image.shape
