@@ -23,7 +23,7 @@ class Image:
     """docstring for ."""
 
     def __init__(self, height, width=640):
-        super(Image, self).__init__()
+        #super(Image, self).__init__()
         self.height = height
         self.width = width
         self.create_image()
@@ -219,20 +219,21 @@ class Image:
 
 
 
-    def segmentation_predict(self, model, crops):
+    def segmentation_predict(self, model, crops, threshold):
         crops_reshape = np.expand_dims(reshape_dataset(crops), axis=-1)
         crops_reshape = np.repeat(crops_reshape, 3, axis=3)
         predicted = model.predict(crops_reshape)
         predicted = predicted.reshape(predicted.shape[:-1])
         predicted = predicted.reshape(crops.shape)
         predicted_image = np.zeros_like(self.image)
-        for row in range(predicted.shape[0]-5):
+        for row in range(predicted.shape[0]):
             y_top = row*self.window_size
             y_bottom = (row+1)*self.window_size
-            for col in range(predicted.shape[1]-5):
+            for col in range(predicted.shape[1]):
                 x_top = col*self.window_size
                 x_bottom = (col+1)*self.window_size
                 predicted_image[y_top:y_bottom,x_top:x_bottom] = predicted[row,col]
+        predicted_image = np.where(predicted_image > threshold, 1, 0)
         plt.imshow(predicted_image)
         plt.imshow(self.segmentation, alpha=0.5)
         plt.xticks(np.arange(0,self.width, 32))
