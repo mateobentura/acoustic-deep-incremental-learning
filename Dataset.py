@@ -3,10 +3,6 @@ import tensorflow_datasets as tfds
 from tensorflow import keras
 import segmentation_models as sm
 
-def reshape_dataset(dataset):
-    shape = dataset.shape
-    return dataset.reshape(shape[0]*shape[1], shape[2], shape[3])
-
 def to_one_hot(image, label):
     global classes
     label = tf.one_hot(label, classes, name='label', axis=-1)

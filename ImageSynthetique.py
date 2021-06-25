@@ -66,7 +66,7 @@ class Image:
         image_resize = cv2.resize(big_image,(self.width,self.height))
         #image_resize = cv2.GaussianBlur(image_resize,(5,5),0.6)
         mask_2 = image_resize.copy().astype(np.uint8)
-        _, mask_2 = cv2.threshold(mask_2, min_intensity, 255, cv2.THRESH_BINARY)
+        _, mask_2 = cv2.threshold(mask_2, min_intensity-1, 255, cv2.THRESH_BINARY)
         self.segmentation += mask_2
         # mask_2 = cv2.bitwise_not(mask_2)
         #
@@ -223,19 +223,20 @@ class Image:
         crops_reshape = np.expand_dims(reshape_dataset(crops), axis=-1)
         crops_reshape = np.repeat(crops_reshape, 3, axis=3)
         predicted = model.predict(crops_reshape)
-        predicted = predicted.reshape((self.height//self.window_size, self.width//self.window_size)+predicted.shape[1:3])
+        predicted = predicted.reshape(predicted.shape[:-1])
+        predicted = predicted.reshape(crops.shape)
         predicted_image = np.zeros_like(self.image)
-        for row in range(1,predicted.shape[0]):
+        for row in range(predicted.shape[0]-5):
             y_top = row*self.window_size
             y_bottom = (row+1)*self.window_size
-            for col in range(1,predicted.shape[1]):
+            for col in range(predicted.shape[1]-5):
                 x_top = col*self.window_size
                 x_bottom = (col+1)*self.window_size
                 predicted_image[y_top:y_bottom,x_top:x_bottom] = predicted[row,col]
         plt.imshow(predicted_image)
-        plt.imshow(test.segmentation, alpha=0.5)
-        plt.xticks(np.arange(0,test.width, 32))
-        plt.yticks(np.arange(0,test.height, 32))
+        plt.imshow(self.segmentation, alpha=0.5)
+        plt.xticks(np.arange(0,self.width, 32))
+        plt.yticks(np.arange(0,self.height, 32))
         plt.grid(color='black')
         plt.show()
         return predicted_image
@@ -247,3 +248,8 @@ def noisy(image, height, intensity):
     random = np.round(np.random.normal(loc=intensity/2,scale=intensity/2, size=(row, col)))
     out += random
     return out
+
+
+def reshape_dataset(dataset):
+    shape = dataset.shape
+    return dataset.reshape(shape[0]*shape[1], shape[2], shape[3])
