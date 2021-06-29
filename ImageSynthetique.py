@@ -12,6 +12,8 @@ params = {'legend.fontsize': 'x-large',
 plt.rcParams.update(params)
 import time
 import cv2
+import tensorflow as tf
+import seaborn as sns
 import matplotlib.patches as patches
 
 def timing(part='', start=None):
@@ -195,7 +197,7 @@ class Image:
         predicted_labels = model.predict(ds_test.batch(32))
         predict = predicted_labels.reshape(shape)
         predict_thr = np.where(predict > threshold, 1, 0)
-        fig = plt.figure(figsize=(20,30))
+        fig = plt.figure(figsize=(20,5))
         plt.subplot(121)
         for obj in self.objects:
             coords = obj['coords']
@@ -213,8 +215,7 @@ class Image:
         plt.subplot(122)
         plt.imshow(predict_thr,vmin=0,vmax=1)
         plt.yticks([])
-        plt.savefig('test_predict_classif', dpi=150)
-        plt.show()
+        #plt.savefig('test_predict_classif')
         return predict_thr
 
 
@@ -274,14 +275,38 @@ class Image:
         arrayShow = np.array([[cmap[i] for i in j] for j in new_labels])
         cmap = {1: cmap[1],2:cmap[2]}
         ## create patches as legend
-        patches =[mpatches.Patch(color=cmap[i],label=labels[i]) for i in cmap]
+        patches_ =[patches.Patch(color=cmap[i],label=labels[i]) for i in cmap]
         # plt.imshow(segm)
         plt.imshow(arrayShow)
-        plt.legend(handles=patches, loc=4, borderaxespad=0.)
+        plt.legend(handles=patches_, loc=4, borderaxespad=0.)
 
         ax.grid(which='both')
         pass
 
+    def confusion_matrix(self, predicted):
+        plt.figure(figsize=(5,4))
+        cf_matrix = tf.math.confusion_matrix(self.segmentation.reshape(-1)/255, predicted.reshape(-1)).numpy()
+
+        group_names =  ["Vrai fond","Fausse échelle","Faux fond","Vraie échelle"]
+        group_counts = ["{0:0.0f}".format(value) for value in
+                        cf_matrix.flatten()]
+        group_percentages = ["{0:.2%}".format(value) for value in
+                             cf_matrix.flatten()/np.sum(cf_matrix)]
+        cf_labels = [f"{v1}\n{v2}\n{v3}" for v1, v2, v3 in zip(group_names,group_counts, group_percentages)]
+
+        cf_labels = np.asarray(cf_labels).reshape(2,2)
+
+        sns.heatmap(cf_matrix,
+                    annot=cf_labels, fmt="",
+                    cmap=['lightgray'], cbar = False,
+                    linewidths=0.5, linecolor='black',
+                    square=True,
+                    xticklabels=['Fond', 'Échelle'], yticklabels=['Fond', 'Échelle'])
+
+        plt.ylabel('Label réel')
+        plt.xlabel('Label prédit')
+        plt.savefig('confusion_matrix',dpi=150)
+        return cf_matrix
 
 def noisy(image, height, intensity):
     row,col= image.shape
