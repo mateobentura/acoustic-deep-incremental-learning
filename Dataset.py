@@ -93,7 +93,11 @@ def classification_model(img_shape, fine_tune_layers=0, dropout=False):
     model.compile(optimizer=opt, loss=loss, metrics=['accuracy'])
     return model
 
-def segmentation_model(img_shape):
-    model = sm.Unet(backbone_name='resnet34', classes=1, input_shape=img_shape, encoder_freeze=True)
+def segmentation_model(img_shape, backbone='resnet34', classes=1):
+    inputs = keras.Input(shape=img_shape+(1,))
+    x = keras.layers.Conv2D(3,(3,3), padding='same')(inputs)
+    base_model = sm.Unet(backbone_name=backbone, classes=classes, input_shape=img_shape+(3,), encoder_weights='imagenet', encoder_freeze=True)
+    outputs = base_model(x)
+    model = keras.Model(inputs, outputs, name=base_model.name)
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     return model
