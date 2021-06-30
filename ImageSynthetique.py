@@ -222,7 +222,6 @@ class Image:
 
     def segmentation_predict(self, model, crops, threshold):
         crops_reshape = np.expand_dims(reshape_dataset(crops), axis=-1)
-        crops_reshape = np.repeat(crops_reshape, 3, axis=3)
         predicted = model.predict(crops_reshape)
         predicted = predicted.reshape(predicted.shape[:-1])
         predicted = predicted.reshape(crops.shape)
