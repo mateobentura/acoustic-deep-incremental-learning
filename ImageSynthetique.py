@@ -31,6 +31,7 @@ class Image:
         self.create_image()
         self.objects = []
         self.lines = []
+        self.predicted = {}
 
     def create_image(self):
         self.image = np.ones((self.height, self.width), np.float32) * 2
@@ -142,7 +143,7 @@ class Image:
         return crops, labels, number, segmentation_crops
 
     def compare_labels(self, resampled_labels, threshold):
-        new_labels = self.resize_labels(resampled_labels)
+        self.predicted['classif'] = self.resize_labels(resampled_labels)
 
         fig = plt.figure()
         ax = fig.gca()
@@ -168,7 +169,7 @@ class Image:
         ax.set_yticks(np.arange(0, self.height, self.pad_v*4))
         plt.title('Zones labellisées, avec un seuil de '+str(threshold))
         plt.imshow(self.mask, vmin=0, vmax=255)
-        plt.imshow(new_labels, vmin=0, vmax=1, alpha=0.5)
+        plt.imshow(self.predicted['classif'], vmin=0, vmax=1, alpha=0.5)
 
         # pairs = np.array(np.where(resampled_labels>0)).transpose()[:,[1, 0]]
         # new_points = np.array([element*[self.pad_h,self.pad_v]+[self.window_size//2, self.window_size//2] for element in pairs ])
@@ -233,18 +234,16 @@ class Image:
                 x_top = col*self.window_size
                 x_bottom = (col+1)*self.window_size
                 predicted_image[y_top:y_bottom,x_top:x_bottom] = predicted[row,col]
-        predicted_image = np.where(predicted_image > threshold, 1, 0)
-        plt.imshow(predicted_image)
+        self.predicted['segm'] = np.where(predicted_image > threshold, 1, 0)
+        plt.imshow(self.predicted['segm'])
         plt.imshow(self.segmentation, alpha=0.5)
         plt.xticks(np.arange(0,self.width, 32))
         plt.yticks(np.arange(0,self.height, 32))
         plt.grid(color='black')
-        plt.show()
-        return predicted_image
+        #plt.show()
+        pass
 
-    def compare_predicted(self, classif_predicted, segm_predicted):
-        new_labels = self.resize_labels(classif_predicted)
-
+    def compare_predicted(self):
         fig = plt.figure()
         ax = fig.gca()
         ax.tick_params(
@@ -264,14 +263,14 @@ class Image:
             grid_color='black',
             grid_alpha=0.1)
 
-        ax.set_xticks(np.arange(0, self.width, self.pad_h*4))
-        ax.set_yticks(np.arange(0, self.height, self.pad_v*4))
-
-        new_labels[segm_predicted>0] = 2.0
+        ax.set_xticks(np.arange(0, self.width, self.pad_h))
+        ax.set_yticks(np.arange(0, self.height, self.pad_v))
+        img = np.copy(self.predicted['classif'])
+        img[self.predicted['segm']>0] = 2.0
         t = 1 ## alpha value
         cmap = {0:[1.,1.0,1.0,t],1:[0.3,0.3,1.0,t],2:[0.5,0.1,0.3,t]}
         labels = {0:'',1:'Masque de classification',2:'Masque de segmentation'}
-        arrayShow = np.array([[cmap[i] for i in j] for j in new_labels])
+        arrayShow = np.array([[cmap[i] for i in j] for j in img])
         cmap = {1: cmap[1],2:cmap[2]}
         ## create patches as legend
         patches_ =[patches.Patch(color=cmap[i],label=labels[i]) for i in cmap]
@@ -304,7 +303,6 @@ class Image:
 
         plt.ylabel('Label réel')
         plt.xlabel('Label prédit')
-        plt.savefig('confusion_matrix',dpi=150)
         return cf_matrix
 
 def noisy(image, height, intensity):
