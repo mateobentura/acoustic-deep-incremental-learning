@@ -24,20 +24,26 @@ def timing(part='', start=None):
 class Image:
     """docstring for ."""
 
-    def __init__(self, height, width=640):
+    def __init__(self, height, width=640, noise_lvl=40):
         #super(Image, self).__init__()
         self.height = height
         self.width = width
-        self.create_image()
+        self.create_image(noise_lvl)
         self.objects = []
         self.lines = []
         self.predicted = {}
 
-    def create_image(self):
+    def create_image(self, noise_lvl, seed=None):
         self.image = np.ones((self.height, self.width), np.float32) * 2
-        self.image = noisy(self.image, 30)
+        self.noisy(noise_lvl, seed)
         self.mask = np.zeros((self.height, self.width), np.uint8)
         self.segmentation = self.mask.copy()
+        pass
+
+    def noisy(self, intensity, seed):
+        np.random.seed(seed)
+        random = np.round(np.random.normal(loc=intensity/2,scale=intensity/2, size=(self.height, self.width)))
+        self.image += random
         pass
 
     def add_object(self, starting_pt, spacing, length, l_var, lines, seed=None):
@@ -317,13 +323,6 @@ class Image:
         print('Sensibilité : '+str(cf_matrix[1,1]/(cf_matrix[1,1]+cf_matrix[0,1])))
         print('Specificité : '+str(cf_matrix[0,0]/(cf_matrix[0,0]+cf_matrix[1,0])))
         return cf_matrix
-
-def noisy(image, intensity):
-    row, col= image.shape
-    out = np.copy(image)
-    random = np.round(np.random.normal(loc=intensity/2,scale=intensity/2, size=(row, col)))
-    out += random
-    return out
 
 
 def reshape_dataset(dataset):

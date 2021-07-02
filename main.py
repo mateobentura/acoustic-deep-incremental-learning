@@ -22,23 +22,23 @@ def main():
         pad_h = 1
         pad_v = 1
 
-        crops, labels, number, segmentation_crops = train.sliding_window(window_size, pad_h, pad_v, threshold)
-        var_time = timing('sliding_window', var_time)
+        # crops, labels, number, segmentation_crops = train.sliding_window(window_size, pad_h, pad_v, threshold)
+        # var_time = timing('sliding_window', var_time)
 
-        indexes = (40//pad_v,50//pad_h-1)
-        plt.subplot(121)
-        plt.imshow(crops[indexes])
-        plt.subplot(122)
-        plt.imshow(segmentation_crops[indexes])
-        plt.savefig('crop')
+        # indexes = (40//pad_v,50//pad_h-1)
+        # plt.subplot(121)
+        # plt.imshow(crops[indexes])
+        # plt.subplot(122)
+        # plt.imshow(segmentation_crops[indexes])
+        # plt.savefig('crop')
 
-        train.compare_labels(labels, threshold)
-        var_time = timing('compare', var_time)
-        plt.savefig('compare')
-        var_time = timing('save', var_time)
-
-        labels /= labels.max()
-        img_shape = (window_size,window_size,1)
+        # train.compare_labels(labels, threshold)
+        # var_time = timing('compare', var_time)
+        # plt.savefig('compare')
+        # var_time = timing('save', var_time)
+        #
+        # labels /= labels.max()
+        # img_shape = (window_size,window_size,1)
         # ds_train, ds_val = crops_to_dataset(crops, labels, balanced=False, split=True)
     if sys.argv[1] == 'test':
         # Image test
