@@ -40,7 +40,7 @@ class Image:
         self.segmentation = self.mask.copy()
         pass
 
-    def add_object(self, starting_pt, spacing, length, l_var, lines):
+    def add_object(self, starting_pt, spacing, length, l_var, lines, seed=None):
         times = 4
         big_image = np.zeros((self.height*times,self.width*times), np.float32)
 
@@ -54,9 +54,15 @@ class Image:
         end = np.array(starting_pt + [length // 2, 0])
 
         min_intensity = 50
+        if seed != None:
+            np.random.seed(seed)
+            seeds = np.random.randint(1024, size=lines)
         for line in range(lines):
+            if seed != None: np.random.seed(seeds[line])
             intensity = np.random.randint(min_intensity,220)
+            if seed != None: np.random.seed(seeds[line])
             thickness = np.random.randint(times,2*times)
+            if seed != None: np.random.seed(seeds[line])
             length_var = [np.random.randint(-l_var*times,l_var*times),0]
             cv2.line(big_image, tuple(start+length_var), tuple(end-length_var), intensity, thickness)
             self.lines[-1][line][:,:] = np.stack((start+length_var,end-length_var))
@@ -308,6 +314,8 @@ class Image:
 
         plt.ylabel('Label réel')
         plt.xlabel('Label prédit')
+        print('Sensibilité : '+str(cf_matrix[1,1]/(cf_matrix[1,1]+cf_matrix[0,1])))
+        print('Specificité : '+str(cf_matrix[0,0]/(cf_matrix[0,0]+cf_matrix[1,0])))
         return cf_matrix
 
 def noisy(image, intensity):
