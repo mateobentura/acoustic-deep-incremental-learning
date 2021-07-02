@@ -35,7 +35,7 @@ class Image:
 
     def create_image(self):
         self.image = np.ones((self.height, self.width), np.float32) * 2
-        self.image = noisy(self.image, 30, 30)
+        self.image = noisy(self.image, 30)
         self.mask = np.zeros((self.height, self.width), np.uint8)
         self.segmentation = self.mask.copy()
         pass
@@ -281,16 +281,21 @@ class Image:
         ax.grid(which='both')
         pass
 
-    def confusion_matrix(self, predicted):
-        plt.figure(figsize=(5,4))
-        cf_matrix = tf.math.confusion_matrix(self.segmentation.reshape(-1)/255, predicted.reshape(-1)).numpy()
+    def confusion_matrix(self, type):
+        plt.figure(figsize=(4.5,3))
+        predicted = self.predicted[type].reshape(-1)
 
+        if type == 'segm':
+            mask = self.segmentation.reshape(-1)/255
+        elif type == 'classif':
+            mask = self.mask.reshape(-1)/255
+
+        cf_matrix = tf.math.confusion_matrix(mask, predicted).numpy()
         group_names =  ["Vrai fond","Fausse échelle","Faux fond","Vraie échelle"]
         group_counts = ["{0:0.0f}".format(value) for value in
                         cf_matrix.flatten()]
-        group_percentages = ["{0:.2%}".format(value) for value in
-                             cf_matrix.flatten()/np.sum(cf_matrix)]
-        cf_labels = [f"{v1}\n{v2}\n{v3}" for v1, v2, v3 in zip(group_names,group_counts, group_percentages)]
+        group_counts[-1] += ' ('+str(sum(cf_matrix[1,:]))+')'
+        cf_labels = [f"{v1}\n{v2}" for v1, v2 in zip(group_names,group_counts)]
 
         cf_labels = np.asarray(cf_labels).reshape(2,2)
 
@@ -305,8 +310,8 @@ class Image:
         plt.xlabel('Label prédit')
         return cf_matrix
 
-def noisy(image, height, intensity):
-    row,col= image.shape
+def noisy(image, intensity):
+    row, col= image.shape
     out = np.copy(image)
     random = np.round(np.random.normal(loc=intensity/2,scale=intensity/2, size=(row, col)))
     out += random
