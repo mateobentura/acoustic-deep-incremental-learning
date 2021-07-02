@@ -1,5 +1,8 @@
 from ImageSynthetique import *
-#from Dataset import *
+import os
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# from Dataset import *
 import sys
 
 def main():
@@ -9,11 +12,13 @@ def main():
     if sys.argv[1] == 'train':
         # Image test
         train = Image(height, width)
-        train.add_object(starting_pt = [24*4, 25],
+        train.add_ladder(starting_pt = [24*4, 25],
                         spacing = 7, length = 12, l_var =1, lines = 32)
-        train.add_object(starting_pt = [350, 30],
+        train.add_ladder(starting_pt = [350, 30],
                         spacing = 13, length = 12, l_var =1, lines = 18)
+        train.add_star(center = [200, 200], radius=3, intensity=100)
         train.plot_label()
+        #plt.imshow(train.image)
         plt.savefig('train')
         var_time = timing('train', var_time)
 
@@ -47,7 +52,7 @@ def main():
         spacings = [5, 7, 9, 11, 13, 15]
         for spacing in spacings:
             pt = [47*(spacing-3), 30]
-            test.add_object(starting_pt = pt,
+            test.add_ladder(starting_pt = pt,
                         spacing = spacing, length = 12, l_var=2, lines = 4*(55//spacing))
 
         fig = test.plot_label()

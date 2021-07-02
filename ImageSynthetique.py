@@ -33,14 +33,18 @@ class Image:
         self.lines = []
         self.predicted = {}
 
-    def create_image(self):
+    def create_image(self, classes=2, noise_lvl=40):
         self.image = np.ones((self.height, self.width), np.float32) * 2
-        self.image = noisy(self.image, 30, 30)
+        self.image = noisy(self.image, noise_lvl)
         self.mask = np.zeros((self.height, self.width), np.uint8)
-        self.segmentation = self.mask.copy()
+        self.segmentation = np.zeros(self.mask.shape+(classes,))
         pass
 
-    def add_object(self, starting_pt, spacing, length, l_var, lines):
+    def clip(self):
+        self.image = np.clip(self.image, 0, 255)
+        pass
+
+    def add_ladder(self, starting_pt, spacing, length, l_var, lines):
         times = 4
         big_image = np.zeros((self.height*times,self.width*times), np.float32)
 
@@ -70,12 +74,35 @@ class Image:
         #image_resize = cv2.GaussianBlur(image_resize,(5,5),0.6)
         mask_2 = image_resize.copy().astype(np.uint8)
         _, mask_2 = cv2.threshold(mask_2, min_intensity-1, 255, cv2.THRESH_BINARY)
-        self.segmentation += mask_2
+        self.segmentation[:,:,0] += mask_2
         # mask_2 = cv2.bitwise_not(mask_2)
         #
         # self.image = cv2.bitwise_and(self.image, self.image, mask = mask_2)
         self.image = cv2.add(self.image, image_resize)
-        self.objects.append({'coords': (rect_top,rect_bottom), 'spacing': spacing//times, 'length': length//times,'length_var': l_var, 'lines': lines})
+        self.clip()
+        self.objects.append({'type': 'line',
+                            'coords': (rect_top,rect_bottom),
+                            'spacing': spacing//times,
+                            'length': length//times,
+                            'length_var': l_var,
+                            'lines': lines})
+        pass
+
+    def add_star(self, center, radius, intensity):
+        times = 4
+        coords = (tuple(np.array(center) - radius), tuple(np.array(center) + radius))
+        self.objects.append({'type': 'star',
+                            'center': center,
+                            'radius': radius,
+                            'coords': coords})
+        big_image = np.zeros((radius*times*4, radius*times*4), dtype='float32')
+        big_image =  cv2.circle(big_image, (radius*times*2, radius*times*2), radius*times, intensity, -1)
+        circle = cv2.resize(big_image, (radius*4, radius*4))
+        slice = [el-radius for el in coords[0]] + [el+radius for el in coords[1]]
+        self.image[slice[0]:slice[2], slice[1]:slice[3]] = cv2.add(self.image[slice[0]:slice[2], slice[1]:slice[3]], circle)
+        _, segmentation = cv2.threshold(circle, intensity-1, 255, cv2.THRESH_BINARY)
+        self.segmentation[:,:,1] = segmentation
+        self.clip()
         pass
 
     def plot_masked(self):
@@ -92,12 +119,15 @@ class Image:
             w = coords[1][0] - coords[0][0]
             h = coords[1][1] - coords[0][1]
             plt.gca().add_patch(patches.Rectangle(pt,w,h,linewidth=1,edgecolor='r',facecolor='none'))
-            text = ''
-            if with_coords:
-                text += 'y: ('+ str(obj['coords'][0][1])+':'+str(obj['coords'][1][1])+')\n'
-            text += 'spacing: '+str(obj['spacing'])+'\n'
-            text += 'length: '+str(obj['length'])+'±'+str(obj['length_var'])+'\n'
-            text += 'lines: '+str(obj['lines'])
+            text = 'type'; str(obj['type'])+'\n'
+            if obj['type'] == 'line':
+                if with_coords:
+                    text += 'y: ('+ str(obj['coords'][0][1])+':'+str(obj['coords'][1][1])+')\n'
+                text += 'spacing: '+str(obj['spacing'])+'\n'
+                text += 'length: '+str(obj['length'])+'±'+str(obj['length_var'])+'\n'
+                text += 'lines: '+str(obj['lines'])
+            if obj['type'] == 'star':
+                text = ''
             pad = 5
             plt.gca().text(pt[0]+w+1+pad/2, pt[1]+pad/2, text,
                             color='white',
@@ -281,16 +311,21 @@ class Image:
         ax.grid(which='both')
         pass
 
-    def confusion_matrix(self, predicted):
-        plt.figure(figsize=(5,4))
-        cf_matrix = tf.math.confusion_matrix(self.segmentation.reshape(-1)/255, predicted.reshape(-1)).numpy()
+    def confusion_matrix(self, type):
+        plt.figure(figsize=(4.5,3))
+        predicted = self.predicted[type].reshape(-1)
 
+        if type == 'segm':
+            mask = self.segmentation.reshape(-1)/255
+        elif type == 'classif':
+            mask = self.mask.reshape(-1)/255
+
+        cf_matrix = tf.math.confusion_matrix(mask, predicted).numpy()
         group_names =  ["Vrai fond","Fausse échelle","Faux fond","Vraie échelle"]
         group_counts = ["{0:0.0f}".format(value) for value in
                         cf_matrix.flatten()]
-        group_percentages = ["{0:.2%}".format(value) for value in
-                             cf_matrix.flatten()/np.sum(cf_matrix)]
-        cf_labels = [f"{v1}\n{v2}\n{v3}" for v1, v2, v3 in zip(group_names,group_counts, group_percentages)]
+        group_counts[-1] += ' ('+str(sum(cf_matrix[1,:]))+')'
+        cf_labels = [f"{v1}\n{v2}" for v1, v2 in zip(group_names,group_counts)]
 
         cf_labels = np.asarray(cf_labels).reshape(2,2)
 
@@ -305,7 +340,7 @@ class Image:
         plt.xlabel('Label prédit')
         return cf_matrix
 
-def noisy(image, height, intensity):
+def noisy(image, intensity):
     row,col= image.shape
     out = np.copy(image)
     random = np.round(np.random.normal(loc=intensity/2,scale=intensity/2, size=(row, col)))
