@@ -320,9 +320,11 @@ class Image:
 
         plt.ylabel('Label réel')
         plt.xlabel('Label prédit')
-        print('Sensibilité : '+str(cf_matrix[1,1]/(cf_matrix[1,1]+cf_matrix[0,1])))
-        print('Specificité : '+str(cf_matrix[0,0]/(cf_matrix[0,0]+cf_matrix[1,0])))
-        return cf_matrix
+        sensibilite = cf_matrix[1,1]/(cf_matrix[1,1]+cf_matrix[0,1])
+        specificite = cf_matrix[0,0]/(cf_matrix[0,0]+cf_matrix[1,0])
+        print('Sensibilité : '+str(sensibilite))
+        print('Specificité : '+str(specificite))
+        return cf_matrix, sensibilite, specificite
 
 
 def reshape_dataset(dataset):
