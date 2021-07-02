@@ -24,16 +24,16 @@ def timing(part='', start=None):
 class Image:
     """docstring for ."""
 
-    def __init__(self, height, width=640, noise_lvl=40):
+    def __init__(self, height, width=640, noise_lvl=40, seed=None):
         #super(Image, self).__init__()
         self.height = height
         self.width = width
-        self.create_image(noise_lvl)
+        self.create_image(noise_lvl, seed)
         self.objects = []
         self.lines = []
         self.predicted = {}
 
-    def create_image(self, noise_lvl, seed=None):
+    def create_image(self, noise_lvl, seed):
         self.image = np.ones((self.height, self.width), np.float32) * 2
         self.noisy(noise_lvl, seed)
         self.mask = np.zeros((self.height, self.width), np.uint8)
