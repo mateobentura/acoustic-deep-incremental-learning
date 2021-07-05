@@ -3,29 +3,32 @@ import matplotlib.pyplot as plt
 params = {'legend.fontsize': 'x-large',
           'figure.figsize': (16, 7.5),
           'axes.labelsize': 'x-large',
-          'axes.titlesize':'x-large',
-          'xtick.labelsize':'x-large',
-          'ytick.labelsize':'x-large',
-          'figure.dpi' : 150,
+          'axes.titlesize': 'x-large',
+          'xtick.labelsize': 'x-large',
+          'ytick.labelsize': 'x-large',
+          'figure.dpi': 150,
           'figure.constrained_layout.use': True}
 
 plt.rcParams.update(params)
-import time
 import cv2
 import tensorflow as tf
 import seaborn as sns
 import matplotlib.patches as patches
 
-def timing(part='', start=None):
-    if start!=None:
-        print('Time of part '+part+':'+str(time.time()-start))
-    return time.time()
 
 class Image:
-    """docstring for ."""
+    """Docstring for Image class, with methods for generating a custom image.
 
-    def __init__(self, height, width=640, noise_lvl=40, seed=None):
-        #super(Image, self).__init__()
+    args:
+        height: int
+        width: int
+        noise_lvl: float
+        seed: int
+    """
+
+    def __init__(self, height, width=640, noise_lvl=0.3, seed=None):
+        """Initialize Image object with height and width."""
+        # super(Image, self).__init__()
         self.height = height
         self.width = width
         self.create_image(noise_lvl, seed)
@@ -34,21 +37,37 @@ class Image:
         self.predicted = {}
 
     def create_image(self, noise_lvl, seed):
+        """Generate canvas for image.
+
+        args:
+            noise_lvl: float
+            seed: int
+        """
         self.image = np.ones((self.height, self.width), np.float32) * 2
-        self.noisy(noise_lvl, seed)
+        self.noisy(noise_lvl*255, seed)
         self.mask = np.zeros((self.height, self.width), np.uint8)
         self.segmentation = self.mask.copy()
         pass
 
     def noisy(self, intensity, seed):
+        """Add noise to blank image.
+
+        args:
+            intensity: int
+            seed: int
+        """
         np.random.seed(seed)
-        random = np.round(np.random.normal(loc=intensity/2,scale=intensity/2, size=(self.height, self.width)))
+        random = np.random.normal(
+                                loc=intensity/2,
+                                scale=intensity/2,
+                                size=(self.height, self.width)
+                                ).round()
         self.image += random
         pass
 
     def add_object(self, starting_pt, spacing, length, l_var, lines, seed=None):
         times = 4
-        big_image = np.zeros((self.height*times,self.width*times), np.float32)
+        big_image = np.zeros((self.height*times, self.width*times), np.float32)
 
         starting_pt = np.array(starting_pt)*times
         spacing *= times
@@ -60,26 +79,30 @@ class Image:
         end = np.array(starting_pt + [length // 2, 0])
 
         min_intensity = 50
-        if seed != None:
+        if seed is not None:
             np.random.seed(seed)
             seeds = np.random.randint(1024, size=lines)
         for line in range(lines):
-            if seed != None: np.random.seed(seeds[line])
+            if seed is not None: np.random.seed(seeds[line])
             intensity = np.random.randint(min_intensity,220)
-            if seed != None: np.random.seed(seeds[line])
-            thickness = np.random.randint(times,2*times)
-            if seed != None: np.random.seed(seeds[line])
-            length_var = [np.random.randint(-l_var*times,l_var*times),0]
-            cv2.line(big_image, tuple(start+length_var), tuple(end-length_var), intensity, thickness)
-            self.lines[-1][line][:,:] = np.stack((start+length_var,end-length_var))
+            if seed is not None: np.random.seed(seeds[line])
+            thickness = np.random.randint(times, 2*times)
+            if seed is not None: np.random.seed(seeds[line])
+            length_var = [np.random.randint(-l_var*times, l_var*times), 0]
+            # Create bars
+            cv2.line(
+                    big_image, tuple(start+length_var),
+                    tuple(end-length_var), intensity, thickness)
+            # Store line coordinates
+            self.lines[-1][line][:, :] = np.stack((start+length_var, end-length_var))
             start[1] += spacing
             end[1] += spacing
         self.lines[-1] //= times
-        rect_bottom = tuple((end-[0,spacing])//times+2)
+        rect_bottom = tuple((end-[0, spacing])//times+2)
         self.mask = cv2.rectangle(self.mask, rect_top, rect_bottom, 255, -1)
 
-        image_resize = cv2.resize(big_image,(self.width,self.height))
-        #image_resize = cv2.GaussianBlur(image_resize,(5,5),0.6)
+        image_resize = cv2.resize(big_image,(self.width, self.height))
+        # image_resize = cv2.GaussianBlur(image_resize,(5,5),0.6)
         mask_2 = image_resize.copy().astype(np.uint8)
         _, mask_2 = cv2.threshold(mask_2, min_intensity-1, 255, cv2.THRESH_BINARY)
         self.segmentation += mask_2
@@ -87,12 +110,17 @@ class Image:
         #
         # self.image = cv2.bitwise_and(self.image, self.image, mask = mask_2)
         self.image = cv2.add(self.image, image_resize)
-        self.objects.append({'coords': (rect_top,rect_bottom), 'spacing': spacing//times, 'length': length//times,'length_var': l_var, 'lines': lines})
+        self.objects.append({
+                            'coords': (rect_top, rect_bottom),
+                            'spacing': spacing//times,
+                            'length': length//times,
+                            'length_var': l_var,
+                            'lines': lines})
         pass
 
     def plot_masked(self):
         masked = cv2.bitwise_and(self.image, self.image, mask=self.mask)
-        fig = plt.imshow(masked, vmin=0, vmax=255)
+        plt.imshow(masked, vmin=0, vmax=255)
         pass
 
     def plot_label(self,with_coords=True):
@@ -100,18 +128,22 @@ class Image:
         plt.imshow(self.image, vmin=0, vmax=255)
         for obj in self.objects:
             coords = obj['coords']
-            pt = (coords[0][0],coords[0][1])
+            pt = (coords[0][0], coords[0][1])
             w = coords[1][0] - coords[0][0]
             h = coords[1][1] - coords[0][1]
-            plt.gca().add_patch(patches.Rectangle(pt,w,h,linewidth=1,edgecolor='r',facecolor='none'))
+            plt.gca().add_patch(patches.Rectangle(
+                                                pt, w, h,
+                                                linewidth=1, edgecolor='r',
+                                                facecolor='none'))
             text = ''
             if with_coords:
-                text += 'y: ('+ str(obj['coords'][0][1])+':'+str(obj['coords'][1][1])+')\n'
+                text += 'y: (' + str(obj['coords'][0][1]) + ':' + str(obj['coords'][1][1])+')\n'
             text += 'spacing: '+str(obj['spacing'])+'\n'
             text += 'length: '+str(obj['length'])+'±'+str(obj['length_var'])+'\n'
             text += 'lines: '+str(obj['lines'])
             pad = 5
-            plt.gca().text(pt[0]+w+1+pad/2, pt[1]+pad/2, text,
+            plt.gca().text(
+                            pt[0]+w+1+pad/2, pt[1]+pad/2, text,
                             color='white',
                             horizontalalignment='left',
                             verticalalignment='top',
@@ -137,11 +169,11 @@ class Image:
                 x_top = i*pad_h
                 x_bottom = i*pad_h + window_size
                 crop = self.image[y_top:y_bottom, x_top:x_bottom]
-                crops[j,i,:,:] = crop
+                crops[j, i, :, :] = crop
                 mask_crop = self.mask[y_top:y_bottom, x_top:x_bottom]
                 # if mask_crop[mask_crop>0].size > threshold:
                 #     labels[j,i] = 1
-                #labels[j,i] = mask_crop[mask_crop>0].size
+                # labels[j,i] = mask_crop[mask_crop>0].size
                 if mask_crop[mask_crop>0].size:
                     lower = ([x_top,y_top]<self.lines[-1]).any(axis=1).all(axis=1)
                     higher = (self.lines[-1]<[x_bottom,y_bottom]).any(axis=1).all(axis=1)
@@ -188,8 +220,8 @@ class Image:
         # plt.scatter(new_points[:,0],new_points[:,1], s=1)
         # And a corresponding grid
         ax.grid(which='both')
-        #ax.grid(which='minor', alpha=0.5, color='black')
-        #ax.grid(which='major', alpha=0.5, color='black')
+        # ax.grid(which='minor', alpha=0.5, color='black')
+        # ax.grid(which='major', alpha=0.5, color='black')
         pass
 
     def resize_labels(self, labels):
@@ -234,6 +266,13 @@ class Image:
 
 
     def segmentation_predict(self, model, crops, threshold):
+        """Function that shows prediction results.
+        input:
+            model (Keras Model class)
+            crops (numpy array of crops)
+            threshold (float)
+        return: null
+        """
         crops_reshape = np.expand_dims(reshape_dataset(crops), axis=-1)
         predicted = model.predict(crops_reshape)
         predicted = predicted.reshape(predicted.shape[:-1])
