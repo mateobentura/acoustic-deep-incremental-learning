@@ -1,35 +1,38 @@
 import tensorflow as tf
-import tensorflow_datasets as tfds
+# import tensorflow_datasets as tfds
 from tensorflow import keras
-import segmentation_models as sm
+import numpy as np
+# import segmentation_models as sm
+
 
 def to_one_hot(image, label):
     global classes
     label = tf.one_hot(label, classes, name='label', axis=-1)
     return image, label
 
-def crops_to_dataset(crops, labels, balanced=True, split=False, shuffle=True):
+
+def crops_to_dataset(crops, labels, balanced=False, split=False, shuffle=True):
     images = crops.reshape((crops.shape[0]*crops.shape[1], crops.shape[2], crops.shape[3]))
     lbs = labels.reshape(-1).astype(int)
-    ds = tf.data.Dataset.from_tensor_slices((images,lbs))
+    ds = tf.data.Dataset.from_tensor_slices((images, lbs))
     ds_size = len(ds)
     if shuffle:
         ds = ds.shuffle(ds_size)
 
     if balanced:
-    # Balancing
+        # Balancing
         bg = np.array([bool(data[1] == 0) for data in ds])
         count = np.bincount(bg)
         ds = ds.batch(32)
         ds_bg = (
-                  ds
+                    ds
                     .unbatch()
-                    .filter(lambda features, label: label==0)
+                    .filter(lambda features, label: label == 0)
                     .repeat())
         ds_obj = (
                     ds
                     .unbatch()
-                    .filter(lambda features, label: label==1)
+                    .filter(lambda features, label: label == 1)
                     .repeat())
 
         ds = tf.data.experimental.sample_from_datasets(
@@ -37,7 +40,7 @@ def crops_to_dataset(crops, labels, balanced=True, split=False, shuffle=True):
 
         ds_size = len(ds.take(count[0]*2))
 
-    #ds = ds.map(to_one_hot)
+    # ds = ds.map(to_one_hot)
     if split:
         split = {'train': 0.8, 'val': 0.2}
 
@@ -57,14 +60,14 @@ def crops_to_dataset(crops, labels, balanced=True, split=False, shuffle=True):
 def classification_model(img_shape, fine_tune_layers=0, dropout=False):
     base_model = keras.applications.ResNet50(
       weights="imagenet",  # Load weights pre-trained on ImageNet.
-      input_shape=(32,32,3),
+      input_shape=(32, 32, 3),
       include_top=False,
     )  # Do not include the ImageNet classifier at the top.
 
     if fine_tune_layers >= 1:
         # Freeze all the layers except for the last `fine_tune_layers`
         for layer in base_model.layers[:-fine_tune_layers]:
-            layer.trainable =  False
+            layer.trainable = False
     else:
         base_model.trainable = False
 
@@ -74,7 +77,7 @@ def classification_model(img_shape, fine_tune_layers=0, dropout=False):
     if img_shape[0] != 32:
         x = keras.layers.experimental.preprocessing.Resizing(32,32)(x)
     # Convolve to adapt to 3-channel input
-    x = keras.layers.Conv2D(3,(3,3), padding='same')(x)
+    x = keras.layers.Conv2D(3, (3, 3), padding='same')(x)
     # Pre-processing
     x = keras.applications.resnet50.preprocess_input(x)
     # Base pre-trained model
@@ -92,6 +95,7 @@ def classification_model(img_shape, fine_tune_layers=0, dropout=False):
     loss = keras.losses.MeanSquaredError()
     model.compile(optimizer=opt, loss=loss, metrics=['accuracy'])
     return model
+
 
 def segmentation_model(img_shape, backbone='resnet34', classes=1):
     inputs = keras.Input(shape=img_shape+(1,))
