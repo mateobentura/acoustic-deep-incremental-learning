@@ -1,3 +1,7 @@
+import matplotlib.patches as patches
+import seaborn as sns
+import tensorflow as tf
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 params = {'legend.fontsize': 'x-large',
@@ -10,11 +14,7 @@ params = {'legend.fontsize': 'x-large',
           'figure.constrained_layout.use': True}
 
 plt.rcParams.update(params)
-import cv2
-import tensorflow as tf
-import seaborn as sns
-import matplotlib.patches as patches
-
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 class Image:
     """Docstring for Image class, with methods for generating a custom image.
@@ -97,7 +97,8 @@ class Image:
                     tuple(start + length_var), tuple(end - length_var),
                     intensity, thickness)
             # Store line coordinates
-            self.lines[-1][line][:, :] = np.stack((start + length_var, end - length_var))
+            self.lines[-1][line][:, :] = np.stack((start + length_var,
+                                                    end - length_var))
             start[1] += spacing
             end[1] += spacing
         self.lines[-1] //= times
@@ -114,7 +115,7 @@ class Image:
         # self.image = cv2.bitwise_and(self.image, self.image, mask = mask_2)
         self.image = cv2.add(self.image, image_resize)
         self.clip()
-        self.objects.append({'type': 'line',
+        self.objects.append({'type': 'ladder',
                             'coords': (rect_top, rect_bottom),
                             'spacing': spacing // times,
                             'length': length // times,
@@ -122,21 +123,31 @@ class Image:
                             'lines': lines})
         pass
 
-    def add_star(self, center, radius, intensity):
+    def add_star(self, center, diameter, intensity):
         times = 4
-        coords = (tuple(np.array(center) - radius), tuple(np.array(center) + radius))
-        self.objects.append({
-                            'type': 'star',
+        intensity = int(intensity*255)
+        radius = diameter / 2
+        radius_ceil = int(np.ceil(radius))
+        radius_floor = int(np.floor(radius))
+
+        top = tuple(np.array(center) - radius_ceil)
+        bottom = tuple(np.array(center) + radius_floor)
+        coords = (top, bottom)
+        self.objects.append({'type': 'star',
                             'center': center,
-                            'radius': radius,
+                            'diameter': diameter,
                             'coords': coords})
-        big_image = np.zeros((radius*times*4, radius*times*4), dtype='float32')
-        big_image = cv2.circle(big_image, (radius*times*2, radius*times*2), radius*times, intensity, -1)
-        circle = cv2.resize(big_image, (radius*4, radius*4))
-        slice = [el-radius for el in coords[0]] + [el+radius for el in coords[1]]
-        self.image[slice[0]:slice[2], slice[1]:slice[3]] = cv2.add(self.image[slice[0]:slice[2], slice[1]:slice[3]], circle)
+        big_image = np.zeros((2*diameter*times, 2*diameter*times), dtype='float32')
+        big_image = cv2.circle(big_image, (diameter*times, diameter*times),
+                            diameter*times//2, intensity, -1)
+        circle = cv2.resize(big_image, (diameter*2, diameter*2))
+        x_m = coords[0][0] - radius_ceil
+        x_p = coords[1][0] + radius_floor
+        y_m = coords[0][1] - radius_ceil
+        y_p = coords[1][1] + radius_floor
+        self.image[x_m:x_p, y_m:y_p] = cv2.add(self.image[x_m:x_p, y_m:y_p], circle)
         _, segmentation = cv2.threshold(circle, intensity-1, 255, cv2.THRESH_BINARY)
-        self.segmentation[:, :, 1] = segmentation
+        self.segmentation[x_m:x_p, y_m:y_p, 1] = segmentation
         self.clip()
         pass
 
@@ -157,12 +168,21 @@ class Image:
             plt.gca().add_patch(patches.Rectangle(pt, w, h,
                                                 linewidth=1, edgecolor='r',
                                                 facecolor='none'))
+            # Display type
             text = 'type'+ str(obj['type'])+'\n'
-            if obj['type'] == 'line':
+            if obj['type'] == 'ladder':
                 if with_coords:
-                    text += 'y: ('+ str(obj['coords'][0][1])+':'+str(obj['coords'][1][1])+')\n'
+                    # Display minimum vertical coordinate
+                    text += 'y: ('+ str(obj['coords'][0][1])+':'
+                    # and maximum
+                    text += str(obj['coords'][1][1])+')\n'
+                # Display spacing in pixels
                 text += 'spacing: '+str(obj['spacing'])+'\n'
-                text += 'length: '+str(obj['length'])+'±'+str(obj['length_var'])+'\n'
+                # Display length
+                text += 'length: '+str(obj['length'])
+                # Random variation in length (maximum in each sense)
+                text += '±'+str(obj['length_var'])+'\n'
+                # Number of lines
                 text += 'lines: '+str(obj['lines'])
             if obj['type'] == 'star':
                 text = ''
@@ -182,28 +202,24 @@ class Image:
         windows_h = (self.width - window_size) // pad_h +1
         windows_v = (self.height - window_size) // pad_v +1
         crops = np.zeros((windows_v, windows_h, window_size, window_size))
-        labels = np.zeros((windows_v, windows_h))
+        labels = np.zeros((windows_v, windows_h, self.classes))
         segmentation_crops = np.zeros((windows_v, windows_h, window_size, window_size, self.classes))
         number = np.zeros_like(labels)
         max = self.mask.max()
         for j in range(windows_v):
-            y_top = j*pad_v
-            y_bottom = j*pad_v + window_size
+            y_m = j*pad_v
+            y_p = j*pad_v + window_size
             for i in range(windows_h):
-                x_top = i*pad_h
-                x_bottom = i*pad_h + window_size
-                crop = self.image[y_top:y_bottom, x_top:x_bottom]
+                x_m = i*pad_h
+                x_p = i*pad_h + window_size
+                crop = self.image[y_m:y_p, x_m:x_p]
                 crops[j, i, :, :] = crop
-                mask_crop = self.mask[y_top:y_bottom, x_top:x_bottom]
+                mask_crop = self.mask[y_m:y_p, x_m:x_p]
                 # if mask_crop[mask_crop>0].size > threshold:
                 #     labels[j,i] = 1
                 # labels[j,i] = mask_crop[mask_crop>0].size
                 if mask_crop[mask_crop > 0].size:
-                    lower = ([x_top, y_top] < self.lines[-1]).any(axis=1).all(axis=1)
-                    higher = (self.lines[-1] < [x_bottom, y_bottom]).any(axis=1).all(axis=1)
-                    slice = np.logical_and(lower, higher)
-                    number[j, i] = self.lines[-1][slice].shape[0]
-                    segmentation_crop = self.segmentation[y_top:y_bottom, x_top:x_bottom]
+                    segmentation_crop = self.segmentation[y_m:y_p, x_m:x_p]
                     if mask_crop[mask_crop > 0].size > threshold * max:
                         labels[j, i] = 1
                     segmentation_crops[j, i] = segmentation_crop
@@ -273,7 +289,10 @@ class Image:
             pt = (coords[0][0]/self.pad_h, coords[0][1]/self.pad_v)
             h = coords[1][1] - coords[0][1]
             h /= self.pad_v
-            text = 'spacing: '+str(obj['spacing'])
+            if obj['type'] == 'ladder':
+                text = 'spacing: '+str(obj['spacing'])
+            elif obj['type'] == 'star':
+                text = 'diameter: ' + str(obj['diameter'])
             plt.gca().text(pt[0], pt[1]+h, text,
                                     color='white',
                                     horizontalalignment='center',
@@ -302,12 +321,12 @@ class Image:
         predicted = predicted.reshape(crops.shape)
         predicted_image = np.zeros_like(self.image)
         for row in range(predicted.shape[0]):
-            y_top = row*self.window_size
-            y_bottom = (row+1)*self.window_size
+            y_m = row*self.window_size
+            y_p = (row+1)*self.window_size
             for col in range(predicted.shape[1]):
-                x_top = col*self.window_size
-                x_bottom = (col+1)*self.window_size
-                predicted_image[y_top:y_bottom,x_top:x_bottom] = predicted[row,col]
+                x_m = col*self.window_size
+                x_p = (col+1)*self.window_size
+                predicted_image[y_m:y_p,x_m:x_p] = predicted[row,col]
         self.predicted['segm'] = np.where(predicted_image > threshold, 1, 0)
         plt.imshow(self.predicted['segm'])
         plt.imshow(self.segmentation, alpha=0.5)

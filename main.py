@@ -9,7 +9,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 def timing(part='', start=None):
     if start is not None:
-        print('Time of part ' + part + ':' + str(time.time() - start))
+        print("Part %s took %1.2fs" % (part, (time.time() - start)))
     return time.time()
 
 
@@ -66,6 +66,7 @@ def main():
                             spacing=spacing, length=12,
                             l_var=2, lines=4*(55//spacing))
 
+        test.add_star([280, 100], 5, 0.3)
         test.plot_label()
         plt.savefig(img_dir+'test')
         var_time = timing('test', var_time)
@@ -73,10 +74,11 @@ def main():
         pad_h = 16
         pad_v = 16
         crops, labels, _, segmentation_crops = test.sliding_window(window_size, pad_h, pad_v, threshold)
-        ds_test = ds.crops_to_dataset(crops, labels, shuffle=False)
+        ds_test = ds.crops_to_dataset(crops, labels[:, :, 0], shuffle=False)
         classif_model = ds.classification_model(img_shape)
         classif_model.load_weights('weights/classif/classif')
-        test.calssification_predict(classif_model, ds_test, labels.shape, threshold)
+        test.calssification_predict(classif_model, ds_test, labels[:, :, 0].shape, threshold)
+        var_time = timing('classification prediction', var_time)
         plt.savefig(img_dir+'test_classif')
 
 
