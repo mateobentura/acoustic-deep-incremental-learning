@@ -39,20 +39,9 @@ def main():
         plt.savefig(img_dir + 'train')
         var_time = timing('train', var_time)
 
-        # # Sliding window
-        # window_size = 32
-        # pad_h = 1
-        # pad_v = 1
 
         # crops, labels, number, segmentation_crops = train.sliding_window(window_size, pad_h, pad_v, threshold)
         # var_time = timing('sliding_window', var_time)
-
-        # indexes = (40//pad_v,50//pad_h-1)
-        # plt.subplot(121)
-        # plt.imshow(crops[indexes])
-        # plt.subplot(122)
-        # plt.imshow(segmentation_crops[indexes])
-        # plt.savefig(img_dir+'crop')
 
         # train.compare_labels(labels, threshold)
         # var_time = timing('compare', var_time)

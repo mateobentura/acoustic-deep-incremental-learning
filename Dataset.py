@@ -57,6 +57,31 @@ def crops_to_dataset(crops, labels, balanced=False, split=False, shuffle=True):
         return ds.prefetch(32)
 
 
+class ClassifModel(keras.Model):
+    """Define custom Model class to edit training stage."""
+    def train_step(self, image, window_size=32, pad_h=1, pad_v=1):
+        """Define custom training step."""
+        # Unpack the data. Its structure depends on your model and
+        # on what you pass to `fit()`.
+        x, y, _, _ = image.sliding_window(window_size, pad_h, pad_v, 0.9)
+
+        with tf.GradientTape() as tape:
+            y_pred = self(x, training=True)  # Forward pass
+            # Compute the loss value
+            # (the loss function is configured in `compile()`)
+            loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
+
+        # Compute gradients
+        trainable_vars = self.trainable_variables
+        gradients = tape.gradient(loss, trainable_vars)
+        # Update weights
+        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+        # Update metrics (includes the metric that tracks the loss)
+        self.compiled_metrics.update_state(y, y_pred)
+        # Return a dict mapping metric names to current value
+        return {m.name: m.result() for m in self.metrics}
+
+
 def classification_model(img_shape, fine_tune_layers=0, dropout=False):
     base_model = keras.applications.ResNet50(
       weights="imagenet",  # Load weights pre-trained on ImageNet.
@@ -89,7 +114,7 @@ def classification_model(img_shape, fine_tune_layers=0, dropout=False):
     x = keras.layers.Dense(256, activation='relu')(x)
     if dropout: x = keras.layers.Dropout(0.7)(x)
     outputs = keras.layers.Dense(1)(x)
-    model = keras.Model(inputs, outputs)
+    model = ClassifModel(inputs, outputs)
 
     opt = keras.optimizers.SGD(learning_rate=0.001, momentum=0.9)
     loss = keras.losses.MeanSquaredError()
