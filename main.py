@@ -8,12 +8,19 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
 def timing(part='', start=None):
+    """Time code sections.
+
+    args:
+        part - str
+        start - timestamp
+    """
     if start is not None:
         print("Part %s took %1.2fs" % (part, (time.time() - start)))
     return time.time()
 
 
 def main():
+    """Run main."""
     height, width = (300, 640)
     threshold = float(sys.argv[2])
     window_size = 32
@@ -27,7 +34,7 @@ def main():
         train.add_ladder(starting_pt=[350, 30],
                         spacing=13, length=12,
                         l_var=1, lines=18)
-        train.add_star(center=[200, 200], radius=3, intensity=100)
+        train.add_disk(center=[200, 200], radius=3, intensity=100)
         train.plot_label()
         plt.savefig(img_dir + 'train')
         var_time = timing('train', var_time)
@@ -66,7 +73,7 @@ def main():
                             spacing=spacing, length=12,
                             l_var=2, lines=4*(55//spacing))
 
-        test.add_star([280, 100], 5, 0.3)
+        test.add_disk([100, 280], 5, 0.3)
         test.plot_label()
         plt.savefig(img_dir+'test')
         var_time = timing('test', var_time)

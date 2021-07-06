@@ -16,14 +16,15 @@ params = {'legend.fontsize': 'x-large',
 plt.rcParams.update(params)
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
+
 class Image:
     """Docstring for Image class, with methods for generating a custom image.
 
-    args:
-        height: int
-        width: int
-        noise_lvl: float
-        seed: int
+    params:
+        height (int): image height
+        width (int): image width
+        noise_lvl (float): percentage of maximum grayscale value
+        seed (int): optional seed that determines random state
     """
 
     def __init__(self, height, width=640, noise_lvl=0.3, seed=None):
@@ -39,9 +40,9 @@ class Image:
     def create_image(self, noise_lvl, seed, classes=2):
         """Generate canvas for image.
 
-        args:
-            noise_lvl: float
-            seed: int
+        params:
+            noise_lvl (float): percentage of maximum grayscale value
+            seed (int): optional seed that determines random state
         """
         self.image = np.ones((self.height, self.width), np.float32) * 2
         self.noisy(noise_lvl*255, seed)
@@ -51,15 +52,16 @@ class Image:
         pass
 
     def clip(self):
+        """Clip image to maximum (255)."""
         self.image = np.clip(self.image, 0, 255)
         pass
 
     def noisy(self, intensity, seed):
         """Add noise to blank image.
 
-        args:
-            intensity: int
-            seed: int
+        params:
+            intensity (int): grayscale value
+            seed (int): optional seed that determines random state
         """
         np.random.seed(seed)
         random = np.random.normal(loc=intensity / 2,
@@ -69,6 +71,16 @@ class Image:
         pass
 
     def add_ladder(self, starting_pt, spacing, length, l_var, lines, seed=None):
+        """Add ladder object to image canvas.
+
+        params:
+            starting_pt (array_like): point from which to start ladder
+            spacing  (int): space inbetween bars of the ladder
+            length (int): bar length
+            l_var (int): maximum length variation (random)
+            lines (int): number of lines
+            seed (int): optional seed that determines random state
+        """
         times = 4
         big_image = np.zeros((self.height*times, self.width*times), np.float32)
 
@@ -106,7 +118,6 @@ class Image:
         self.mask = cv2.rectangle(self.mask, rect_top, rect_bottom, 255, -1)
 
         image_resize = cv2.resize(big_image, (self.width, self.height))
-        # image_resize = cv2.GaussianBlur(image_resize,(5,5),0.6)
         mask_2 = image_resize.copy().astype(np.uint8)
         _, mask_2 = cv2.threshold(mask_2, min_intensity-1, 255, cv2.THRESH_BINARY)
         self.segmentation[:, :, 0] += mask_2
@@ -123,7 +134,14 @@ class Image:
                             'lines': lines})
         pass
 
-    def add_star(self, center, diameter, intensity):
+    def add_disk(self, center, diameter, intensity):
+        """Add dosk object to image canvas.
+
+        params:
+            center (array_like): coordinates of the circle's center
+            diameter (int): diameter in pixels
+            intensity (float): maximum intensity in percentage
+        """
         times = 4
         intensity = int(intensity*255)
         radius = diameter / 2
@@ -133,7 +151,7 @@ class Image:
         top = tuple(np.array(center) - radius_ceil)
         bottom = tuple(np.array(center) + radius_floor)
         coords = (top, bottom)
-        self.objects.append({'type': 'star',
+        self.objects.append({'type': 'disk',
                             'center': center,
                             'diameter': diameter,
                             'coords': coords})
@@ -145,22 +163,28 @@ class Image:
         x_p = coords[1][0] + radius_floor
         y_m = coords[0][1] - radius_ceil
         y_p = coords[1][1] + radius_floor
-        self.image[x_m:x_p, y_m:y_p] = cv2.add(self.image[x_m:x_p, y_m:y_p], circle)
+        self.image[y_m:y_p, x_m:x_p] = cv2.add(self.image[y_m:y_p, x_m:x_p], circle)
         _, segmentation = cv2.threshold(circle, intensity-1, 255, cv2.THRESH_BINARY)
-        self.segmentation[x_m:x_p, y_m:y_p, 1] = segmentation
+        self.segmentation[y_m:y_p, x_m:x_p, 1] = segmentation
         self.clip()
         pass
 
     def plot_masked(self):
+        """Plot image masked."""
         masked = cv2.bitwise_and(self.image, self.image, mask=self.mask)
         plt.imshow(masked, vmin=0, vmax=255)
         pass
 
     def plot_label(self, with_coords=True):
-        fig = plt.figure()
+        """Plot image with labels, shows rectangle around objects and caracteristics.
+
+         params:
+            with_coords (bool): option to print out minimum and maximum coordinates.
+        """
+        plt.figure()
         plt.imshow(self.image, vmin=0, vmax=255)
-        for obj in self.objects:
-            coords = obj['coords']
+        for o in self.objects:
+            coords = o['coords']
             pt = (coords[0][0], coords[0][1])
             w = coords[1][0] - coords[0][0]
             h = coords[1][1] - coords[0][1]
@@ -169,32 +193,33 @@ class Image:
                                                 linewidth=1, edgecolor='r',
                                                 facecolor='none'))
             # Display type
-            text = 'type'+ str(obj['type'])+'\n'
-            if obj['type'] == 'ladder':
+            text = f"type: {o['type']}\n"
+            if o['type'] == 'ladder':
                 if with_coords:
-                    # Display minimum vertical coordinate
-                    text += 'y: ('+ str(obj['coords'][0][1])+':'
-                    # and maximum
-                    text += str(obj['coords'][1][1])+')\n'
+                    # Display minimum and maximum vertical coordinates
+                    text += 'y: ({}:{})\n'.format(*o['coords'][:][1])
                 # Display spacing in pixels
-                text += 'spacing: '+str(obj['spacing'])+'\n'
-                # Display length
-                text += 'length: '+str(obj['length'])
-                # Random variation in length (maximum in each sense)
-                text += '±'+str(obj['length_var'])+'\n'
+                text += 'spacing: {} \n'.format(o['spacing'])
+                # Display length and max variation in length
+                text += 'length: {}±{}\n'.format(o['length'], o['length_var'])
                 # Number of lines
-                text += 'lines: '+str(obj['lines'])
-            if obj['type'] == 'star':
-                text = ''
+                text += 'lines: {}'.format(o['lines'])
+                v_align = 'top'
+            if o['type'] == 'disk':
+                # Display center coordinates
+                text += 'center: ({}, {})\n'.format(*o['center'])
+                # Display diameter
+                text += f"diameter: {o['diameter']}"
+                v_align = 'center'
             pad = 5
             plt.gca().text(pt[0]+w+1+pad/2, pt[1]+pad/2, text,
                             color='white',
                             horizontalalignment='left',
-                            verticalalignment='top',
+                            verticalalignment=v_align,
                             bbox=dict(facecolor='black', alpha=0.5, pad=pad, linewidth=0))
         plt.colorbar(shrink=0.85, pad=0.01)
 
-        return fig
+        pass
 
     def sliding_window(self, window_size, pad_h, pad_v, threshold):
         self.window_size = window_size
@@ -291,7 +316,7 @@ class Image:
             h /= self.pad_v
             if obj['type'] == 'ladder':
                 text = 'spacing: '+str(obj['spacing'])
-            elif obj['type'] == 'star':
+            elif obj['type'] == 'disk':
                 text = 'diameter: ' + str(obj['diameter'])
             plt.gca().text(pt[0], pt[1]+h, text,
                                     color='white',
