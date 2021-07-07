@@ -10,11 +10,18 @@ params = {'legend.fontsize': 'x-large',
           'axes.titlesize': 'x-large',
           'xtick.labelsize': 'x-large',
           'ytick.labelsize': 'x-large',
-          'figure.dpi': 150,
+          'figure.dpi': 300,
           'figure.constrained_layout.use': True}
 
 plt.rcParams.update(params)
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
+
+def format_text(object, key, new_line=True):
+    """Format text from object caracteristics."""
+    formatted = f"{key}: {object[key]}"
+    if new_line: formatted += '\n'
+    return formatted
 
 
 class Image:
@@ -37,7 +44,7 @@ class Image:
         self.lines = []
         self.predicted = {}
 
-    def create_image(self, noise_lvl, seed, classes=2):
+    def create_image(self, noise_lvl, seed, classes=3):
         """Generate canvas for image.
 
         params:
@@ -46,9 +53,9 @@ class Image:
         """
         self.image = np.ones((self.height, self.width), np.float32) * 2
         self.noisy(noise_lvl*255, seed)
-        self.mask = np.zeros((self.height, self.width), np.uint8)
-        self.segmentation = np.zeros(self.mask.shape+(classes,))
         self.classes = classes
+        self.mask = np.zeros((self.height, self.width, self.classes), np.uint8)
+        self.segmentation = np.zeros_like(self.mask)
         pass
 
     def clip(self):
@@ -90,20 +97,15 @@ class Image:
 
         self.lines.append(np.zeros((lines, 2, 2)))
         start = np.array(starting_pt - [length // 2, 0])
-        rect_top = tuple(start//times-2)
+        rect_top = tuple(start//times-[l_var, 2])
         end = np.array(starting_pt + [length // 2, 0])
 
         min_intensity = 50
-        if seed is not None:
-            np.random.seed(seed)
-            seeds = np.random.randint(1024, size=lines)
+        rng = np.random.RandomState(seed)
         for line in range(lines):
-            if seed is not None: np.random.seed(seeds[line])
-            intensity = np.random.randint(min_intensity, 220)
-            if seed is not None: np.random.seed(seeds[line])
-            thickness = np.random.randint(times, 2*times)
-            if seed is not None: np.random.seed(seeds[line])
-            length_var = [np.random.randint(-l_var*times, l_var*times), 0]
+            intensity = rng.randint(min_intensity, 220)
+            thickness = rng.randint(times, 2*times)
+            length_var = [rng.randint(-l_var*times, l_var*times), 0]
             # Create bars
             cv2.line(big_image,
                     tuple(start + length_var), tuple(end - length_var),
@@ -114,16 +116,14 @@ class Image:
             start[1] += spacing
             end[1] += spacing
         self.lines[-1] //= times
-        rect_bottom = tuple((end-[0, spacing])//times+2)
-        self.mask = cv2.rectangle(self.mask, rect_top, rect_bottom, 255, -1)
+        rect_bottom = tuple((end-[0, spacing])//times+[l_var, 2])
+        self.mask[0] = cv2.rectangle(self.mask[0], rect_top, rect_bottom, 255, -1)
 
         image_resize = cv2.resize(big_image, (self.width, self.height))
-        mask_2 = image_resize.copy().astype(np.uint8)
-        _, mask_2 = cv2.threshold(mask_2, min_intensity-1, 255, cv2.THRESH_BINARY)
-        self.segmentation[:, :, 0] += mask_2
-        # mask_2 = cv2.bitwise_not(mask_2)
-        #
-        # self.image = cv2.bitwise_and(self.image, self.image, mask = mask_2)
+        segmentation = image_resize.copy().astype(np.uint8)
+        _, segmentation = cv2.threshold(segmentation, min_intensity-1, 255, cv2.THRESH_BINARY)
+        self.segmentation[:, :, 0] += segmentation
+
         self.image = cv2.add(self.image, image_resize)
         self.clip()
         self.objects.append({'type': 'ladder',
@@ -169,6 +169,61 @@ class Image:
         self.clip()
         pass
 
+    def add_lines(self, starting_pt, spacing, spacing_var, thickness, lines, length=10, l_var=1, seed=None):
+        """Add line object to image canvas.
+
+        params:
+            starting_pt (array_like): point from which to start lines
+            spacing  (int): space inbetween lines
+            thickness (int): maximum thickness (random)
+            length (int): maximum line length (random)
+            l_var (int): maximum length variation (random)
+            lines (int): number of lines
+            seed (int): optional seed that determines random state
+        """
+        self.objects.append({'type': 'line',
+                            'spacing': spacing,
+                            'spacing_var': int(spacing_var*spacing),
+                            'thickness': thickness,
+                            'length': length,
+                            'length_var': l_var,
+                            'lines': lines})
+        starting_pt = np.array(starting_pt)
+        rect_top = tuple((starting_pt - [length // 2, 0] - [l_var, thickness]))
+
+        times = 4
+        big_image = np.zeros((self.height*times, self.width*times), np.float32)
+
+        starting_pt *= times
+        spacing *= times
+        length *= times
+        center = np.array(starting_pt)
+
+        min_intensity = 50
+        rng = np.random.RandomState(seed)
+        for line in range(lines):
+            intensity = rng.randint(min_intensity, 220)
+            thick = rng.randint(times//2, thickness*times//2)
+            length_var = rng.randint(-l_var*times, l_var*times)
+            # Create lines
+            cv2.ellipse(big_image, tuple(center), ((length+length_var)//2, thick),
+                    0, 0, 360, intensity, -1)
+            if line != (lines-1):
+                center[1] += spacing * (rng.random() + spacing_var)
+
+        rect_bottom = tuple((np.array(center) + [length // 2, 0])//times + [l_var, thickness])
+        self.objects[-1]['coords'] = (rect_top, rect_bottom)
+        self.mask[2] = cv2.rectangle(self.mask[2], rect_top, rect_bottom, 255, -1)
+
+        image_resize = cv2.resize(big_image, (self.width, self.height))
+        segmentation = image_resize.copy().astype(np.uint8)
+        _, segmentation = cv2.threshold(segmentation, min_intensity-1, 255, cv2.THRESH_BINARY)
+        self.segmentation[:, :, 2] += segmentation
+        self.image = cv2.add(self.image, image_resize)
+        self.clip()
+        pass
+
+
     def plot_masked(self):
         """Plot image masked."""
         masked = cv2.bitwise_and(self.image, self.image, mask=self.mask)
@@ -188,10 +243,6 @@ class Image:
             pt = (coords[0][0], coords[0][1])
             w = coords[1][0] - coords[0][0]
             h = coords[1][1] - coords[0][1]
-
-            plt.gca().add_patch(patches.Rectangle(pt, w, h,
-                                                linewidth=1, edgecolor='r',
-                                                facecolor='none'))
             # Display type
             text = f"type: {o['type']}\n"
             if o['type'] == 'ladder':
@@ -199,18 +250,38 @@ class Image:
                     # Display minimum and maximum vertical coordinates
                     text += 'y: ({}:{})\n'.format(*o['coords'][:][1])
                 # Display spacing in pixels
-                text += 'spacing: {} \n'.format(o['spacing'])
+                text += format_text(o, 'spacing')
                 # Display length and max variation in length
                 text += 'length: {}±{}\n'.format(o['length'], o['length_var'])
                 # Number of lines
-                text += 'lines: {}'.format(o['lines'])
+                text += format_text(o, 'lines', new_line=False)
                 v_align = 'top'
-            if o['type'] == 'disk':
+            elif o['type'] == 'disk':
                 # Display center coordinates
-                text += 'center: ({}, {})\n'.format(*o['center'])
+                text += 'center: ({}, {})\n'.format(o['center'][1], o['center'][0])
                 # Display diameter
-                text += f"diameter: {o['diameter']}"
+                text += format_text(o, 'diameter', new_line=False)
                 v_align = 'center'
+                pt = (pt[0]-2, pt[1]-2)
+                w += 2
+                h += 2
+            elif o['type'] == 'line':
+                if with_coords:
+                    # Display minimum and maximum vertical coordinates
+                    text += 'y: ({}:{})\n'.format(o['coords'][0][1], o['coords'][1][1])
+                # Display spacing in pixels
+                text += 'spacing: {}±{}\n'.format(o['spacing'], o['spacing_var'])
+                # Display line thickness
+                text += format_text(o, 'thickness')
+                # Display length and max variation in length
+                text += 'length: {}±{}\n'.format(o['length'], o['length_var'])
+                # Number of lines
+                text += format_text(o, 'lines', new_line=False)
+                v_align = 'top'
+
+            plt.gca().add_patch(patches.Rectangle(pt, w, h,
+                                                linewidth=1, edgecolor='r',
+                                                facecolor='none'))
             pad = 5
             plt.gca().text(pt[0]+w+1+pad/2, pt[1]+pad/2, text,
                             color='white',

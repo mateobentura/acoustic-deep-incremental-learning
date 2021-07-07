@@ -66,27 +66,33 @@ def main():
         # Image test
         test = imsy.Image(300, noise_lvl=0.2)
         # Premier objet
-        spacings = [5, 7, 9, 11, 13, 15]
-        for spacing in spacings:
-            pt = [47*(spacing-3), 30]
-            test.add_ladder(starting_pt=pt,
-                            spacing=spacing, length=12,
-                            l_var=2, lines=4*(55//spacing))
-
-        test.add_disk([100, 280], 5, 0.3)
+        # spacings = [5, 7, 9, 11, 13, 15]
+        # for spacing in spacings:
+        #     pt = [47*(spacing-3), 30]
+        #     test.add_ladder(starting_pt=pt,
+        #                     spacing=spacing, length=12,
+        #                     l_var=2, lines=4*(55//spacing), seed=40)
+        # Add ladder
+        test.add_ladder(starting_pt=[50, 30], spacing=7, length=12,
+                        l_var=5, lines=30, seed=40)
+        # Add disk
+        test.add_disk(center=[180, 50], diameter=5, intensity=0.7)
+        # Add lines
+        test.add_lines(starting_pt=[320, 100], spacing=30, spacing_var=0.5, thickness=3,
+                        lines=5, seed=30)
         test.plot_label()
         plt.savefig(img_dir+'test')
         var_time = timing('test', var_time)
-        img_shape = (window_size, window_size, 1)
-        pad_h = 16
-        pad_v = 16
-        crops, labels, _, segmentation_crops = test.sliding_window(window_size, pad_h, pad_v, threshold)
-        ds_test = ds.crops_to_dataset(crops, labels[:, :, 0], shuffle=False)
-        classif_model = ds.classification_model(img_shape)
-        classif_model.load_weights('weights/classif/classif')
-        test.calssification_predict(classif_model, ds_test, labels[:, :, 0].shape, threshold)
-        var_time = timing('classification prediction', var_time)
-        plt.savefig(img_dir+'test_classif')
+        # img_shape = (window_size, window_size, 1)
+        # pad_h = 16
+        # pad_v = 16
+        # crops, labels, _, segmentation_crops = test.sliding_window(window_size, pad_h, pad_v, threshold)
+        # ds_test = ds.crops_to_dataset(crops, labels[:, :, 0], shuffle=False)
+        # classif_model = ds.classification_model(img_shape)
+        # classif_model.load_weights('weights/classif/classif')
+        # test.calssification_predict(classif_model, ds_test, labels[:, :, 0].shape, threshold)
+        # var_time = timing('classification prediction', var_time)
+        # plt.savefig(img_dir+'test_classif')
 
 
 if __name__ == "__main__":
