@@ -27,17 +27,17 @@ class Image:
         seed (int): optional seed that determines random state
     """
 
-    def __init__(self, height, width=640, noise_lvl=0.3, seed=None):
+    def __init__(self, height, width=640, noise_lvl=0.3, seed=None, classes=1):
         """Initialize Image object with height and width."""
         # super(Image, self).__init__()
         self.height = height
         self.width = width
-        self.create_image(noise_lvl, seed)
+        self.create_image(noise_lvl, seed, classes)
         self.objects = []
         self.lines = []
         self.predicted = {}
 
-    def create_image(self, noise_lvl, seed, classes=2):
+    def create_image(self, noise_lvl, seed, classes):
         """Generate canvas for image.
 
         params:

@@ -4,6 +4,7 @@ import sys
 import time
 import matplotlib.pyplot as plt
 import os
+import numpy as np
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
@@ -34,7 +35,6 @@ def main():
         train.add_ladder(starting_pt=[350, 30],
                         spacing=13, length=12,
                         l_var=1, lines=18)
-        train.add_disk(center=[200, 200], radius=3, intensity=100)
         train.plot_label()
         plt.savefig(img_dir + 'train')
         var_time = timing('train', var_time)
@@ -64,29 +64,31 @@ def main():
         # ds_train, ds_val = crops_to_dataset(crops, labels, balanced=False, split=True)
     if sys.argv[1] == 'test':
         # Image test
-        test = imsy.Image(300, noise_lvl=0.2)
-        # Premier objet
-        spacings = [5, 7, 9, 11, 13, 15]
-        for spacing in spacings:
-            pt = [47*(spacing-3), 30]
-            test.add_ladder(starting_pt=pt,
-                            spacing=spacing, length=12,
-                            l_var=2, lines=4*(55//spacing))
-
-        test.add_disk([100, 280], 5, 0.3)
-        test.plot_label()
-        plt.savefig(img_dir+'test')
-        var_time = timing('test', var_time)
-        img_shape = (window_size, window_size, 1)
-        pad_h = 16
-        pad_v = 16
-        crops, labels, _, segmentation_crops = test.sliding_window(window_size, pad_h, pad_v, threshold)
-        ds_test = ds.crops_to_dataset(crops, labels[:, :, 0], shuffle=False)
-        classif_model = ds.classification_model(img_shape)
-        classif_model.load_weights('weights/classif/classif')
-        test.calssification_predict(classif_model, ds_test, labels[:, :, 0].shape, threshold)
-        var_time = timing('classification prediction', var_time)
-        plt.savefig(img_dir+'test_classif')
+        seed = 500
+        bruit_min, bruit_max = float(sys.argv[3]), float(sys.argv[4])
+        range = np.arange(bruit_min, bruit_max+0.1, 0.1).round(1)
+        for noise_lvl in range:
+            test = imsy.Image(300, noise_lvl=noise_lvl, seed=seed)
+            # Premier objet
+            spacings = [5, 7, 9, 11, 13, 15]
+            for spacing in spacings:
+                pt = [47*(spacing-3), 30]
+                test.add_ladder(starting_pt=pt,
+                                spacing=spacing, length=12,
+                                l_var=2, lines=4*(55//spacing), seed=seed)
+            test.plot_label()
+            plt.savefig(img_dir+'test')
+            var_time = timing('test', var_time)
+            img_shape = (window_size, window_size, 1)
+            pad_h = 16
+            pad_v = 16
+            crops, labels, _, segmentation_crops = test.sliding_window(window_size, pad_h, pad_v, threshold)
+            ds_test = ds.crops_to_dataset(crops, labels[:, :, 0], shuffle=False)
+            classif_model = ds.classification_model(img_shape)
+            classif_model.load_weights('weights/classif/classif')
+            test.calssification_predict(classif_model, ds_test, labels[:, :, 0].shape, threshold)
+            var_time = timing('classification prediction for noise level '+str(noise_lvl), var_time)
+            plt.savefig(img_dir+'test_classif_'+str(noise_lvl).replace('.', '_'))
 
 
 if __name__ == "__main__":
