@@ -11,9 +11,11 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 def timing(part='', start=None):
     """Time code sections.
 
-    args:
-        part - str
-        start - timestamp
+    Arguments:
+    ---------
+        part (str): name of section
+        start: previous timestamp
+
     """
     if start is not None:
         print("Part %s took %1.2fs" % (part, (time.time() - start)))
@@ -67,6 +69,11 @@ def main():
         seed = 500
         bruit_min, bruit_max = float(sys.argv[3]), float(sys.argv[4])
         range = np.arange(bruit_min, bruit_max+0.1, 0.1).round(1)
+        img_shape = (window_size, window_size, 1)
+        classif_model = ds.classification_model(img_shape)
+        classif_model.load_weights('weights/classif/classif')
+        classif_model_noise = ds.classification_model(img_shape)
+        classif_model_noise.load_weights('weights/classif_noise/classif')
         for noise_lvl in range:
             test = imsy.Image(300, noise_lvl=noise_lvl, seed=seed)
             # Premier objet
@@ -77,18 +84,17 @@ def main():
                                 spacing=spacing, length=12,
                                 l_var=2, lines=4*(55//spacing), seed=seed)
             test.plot_label()
-            plt.savefig(img_dir+'test')
+            niv_str = str(noise_lvl).replace('.', '_')
+            plt.savefig(img_dir+'test_'+niv_str)
             var_time = timing('test', var_time)
-            img_shape = (window_size, window_size, 1)
+
             pad_h = 16
             pad_v = 16
             crops, labels, _, segmentation_crops = test.sliding_window(window_size, pad_h, pad_v, threshold)
             ds_test = ds.crops_to_dataset(crops, labels[:, :, 0], shuffle=False)
-            classif_model = ds.classification_model(img_shape)
-            classif_model.load_weights('weights/classif/classif')
             test.calssification_predict(classif_model, ds_test, labels[:, :, 0].shape, threshold)
             var_time = timing('classification prediction for noise level '+str(noise_lvl), var_time)
-            plt.savefig(img_dir+'test_classif_'+str(noise_lvl).replace('.', '_'))
+            plt.savefig(img_dir+'test_classif_'+niv_str)
 
 
 if __name__ == "__main__":
