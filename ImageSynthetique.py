@@ -350,6 +350,7 @@ class Image:
                 x_p = (col+1)*self.window_size
                 predicted_image[y_m:y_p,x_m:x_p] = predicted[row,col]
         self.predicted['segm'] = np.where(predicted_image > threshold, 1, 0)
+        plt.figure(figsize=(16, 7.5))
         plt.imshow(self.predicted['segm'])
         plt.imshow(self.segmentation, alpha=0.5)
         plt.xticks(np.arange(0,self.width, 32))
@@ -423,8 +424,8 @@ class Image:
         # plt.ylabel('Label réel')
         # plt.xlabel('Label prédit')
         print(cf_matrix)
-        sensibilite = cf_matrix[1, 1] / (cf_matrix[1, 1] + cf_matrix[0, 1])
-        specificite = cf_matrix[0, 0] / (cf_matrix[0, 0] + cf_matrix[1, 0])
+        sensibilite = cf_matrix[1, 1] / (cf_matrix[1, 1] + cf_matrix[1, 0])
+        specificite = cf_matrix[0, 0] / (cf_matrix[0, 0] + cf_matrix[0, 1])
         print('Sensibilité : '+str(sensibilite))
         print('Specificité : '+str(specificite))
         return cf_matrix, sensibilite, specificite

@@ -3,7 +3,6 @@ import tensorflow as tf
 from tensorflow import keras
 import numpy as np
 import segmentation_models as sm
-sm.framework()
 
 
 def to_one_hot(image, label):

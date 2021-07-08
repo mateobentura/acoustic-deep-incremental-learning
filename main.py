@@ -1,11 +1,13 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['SM_FRAMEWORK'] = 'tf.keras'
 import ImageSynthetique as imsy
 import Dataset as ds
 import sys
 import time
 import matplotlib.pyplot as plt
-import os
 import numpy as np
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
 
 
 def timing(part='', start=None):
@@ -92,6 +94,7 @@ def main():
             test.plot_label()
             niv_str = str(noise_lvl).replace('.', '_')
             plt.savefig(img_dir+'test_'+niv_str)
+            plt.close()
             var_time = timing('test image generation', var_time)
 
             pad_h = 16
@@ -100,6 +103,7 @@ def main():
             ds_test = ds.crops_to_dataset(test.crops, test.labels['classif'][:, :, 0], shuffle=False)
             test.calssification_predict(classif_model, ds_test, test.labels['classif'][:, :, 0].shape, threshold)
             plt.savefig(img_dir+'test_classif_'+niv_str)
+            plt.close()
             var_time = timing('classification prediction for noise level '+str(noise_lvl), var_time)
 
             index = int(noise_lvl*10) - 1
@@ -109,10 +113,10 @@ def main():
             # Segmenation
             test.sliding_window(window_size, pad_h=window_size, pad_v=window_size, threshold=0.8)
             test.segmentation_predict(segm_model, test.crops, threshold=0.99)
+            plt.savefig(img_dir+'test_segm_'+niv_str)
             _, m_segm['sensibilité'][index], m_segm['specificité'][index] = test.confusion_matrix('segm')
 
             var_time = timing('test_segm', var_time)
-            plt.savefig('test_predict_segm')
         np.savetxt('m_classif', np.array([m_classif['sensibilité'], m_classif['specificité']]))
         np.savetxt('m_segm', np.array([m_segm['sensibilité'], m_segm['specificité']]))
     elif sys.argv[1] == 'test_sens':
@@ -122,7 +126,7 @@ def main():
         m = np.loadtxt('m_segm')
         m_segm = {}
         m_segm['sensibilité'], m_segm['specificité'] = m[0], m[1]
-        
+
         noise_min, noise_max = float(sys.argv[2]), float(sys.argv[3])
         range = np.arange(noise_min, noise_max+0.1, 0.1).round(1)
 
@@ -130,13 +134,13 @@ def main():
         ax1.title.set_text('Classification')
         ax1.plot(range, m_classif['sensibilité'], label='Sensibilité')
         ax1.set_xlim(xmin=noise_min, xmax=noise_max)
-        ax1.set_ylim(ymin=0.45, ymax=1)
+        ax1.set_ylim(ymin=0.5, ymax=1)
         ax1.plot(range, m_classif['specificité'], label='Specificité')
         ax1.legend(loc='lower right')
 
         ax2.title.set_text('Segmentation')
         ax2.plot(range, m_segm['sensibilité'], label='Sensibilité')
-        ax2.set_ylim(ymin=0.2, ymax=1)
+        ax2.set_ylim(ymin=0.5, ymax=1)
         ax2.plot(range, m_segm['specificité'], label='Specificité')
         ax2.legend(loc='lower right')
         plt.savefig(img_dir+'sens_spec')
