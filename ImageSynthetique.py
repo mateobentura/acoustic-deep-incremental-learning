@@ -351,11 +351,25 @@ class Image:
                 predicted_image[y_m:y_p,x_m:x_p] = predicted[row,col]
         self.predicted['segm'] = np.where(predicted_image > threshold, 1, 0)
         plt.figure(figsize=(16, 7.5))
+        ax = plt.gca()
         plt.imshow(self.predicted['segm'])
         plt.imshow(self.segmentation, alpha=0.5)
         plt.xticks(np.arange(0,self.width, 32))
         plt.yticks(np.arange(0,self.height, 32))
-        plt.grid(color='black')
+        img = np.copy(self.predicted['classif'])
+        img[self.predicted['segm']>0] = 2.0
+        t = 1 # alpha value
+        cmap = {0:[1.,1.0,1.0,t],1:[0.3,0.3,1.0,t],2:[0.5,0.1,0.3,t]}
+        labels = {0:'',1:'Masque de classification',2:'Masque de segmentation'}
+        arrayShow = np.array([[cmap[i] for i in j] for j in img])
+        cmap = {1: cmap[1],2:cmap[2]}
+        ## create patches as legend
+        patches_ =[patches.Patch(color=cmap[i],label=labels[i]) for i in cmap]
+        # plt.imshow(segm)
+        plt.imshow(arrayShow)
+        plt.legend(handles=patches_, loc=4, borderaxespad=0.)
+
+        ax.grid(which='both')
         #plt.show()
         pass
 
