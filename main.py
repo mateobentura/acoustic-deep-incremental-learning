@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-
 def timing(part='', start=None):
     """Time code sections.
 
@@ -73,6 +72,7 @@ def main():
         noise_min, noise_max = float(sys.argv[3]), float(sys.argv[4])
         range = np.arange(noise_min, noise_max+0.1, 0.1).round(1)
         img_shape = (window_size, window_size)
+        var_time = timing()
         # Define models
         # Classification
         classif_model = ds.classification_model(img_shape)
@@ -82,6 +82,7 @@ def main():
         segm_model.load_weights('weights/segm/segm')
         m_classif = {'sensibilité': np.zeros((6)), 'specificité': np.zeros((6))}
         m_segm = {'sensibilité': np.zeros((6)), 'specificité': np.zeros((6))}
+        var_time = timing('load models', var_time)
         for noise_lvl in range:
             test = imsy.Image(300, noise_lvl=noise_lvl, seed=seed)
             # Premier objet
@@ -91,10 +92,10 @@ def main():
                 test.add_ladder(starting_pt=pt,
                                 spacing=spacing, length=12,
                                 l_var=2, lines=4*(55//spacing), seed=seed)
-            test.plot_label()
+            # test.plot_label()
             niv_str = str(noise_lvl).replace('.', '_')
-            plt.savefig(img_dir+'test_'+niv_str)
-            plt.close()
+            # plt.savefig(img_dir+'test_'+niv_str)
+            # plt.close()
             var_time = timing('test image generation', var_time)
 
             pad_h = 16
@@ -110,8 +111,9 @@ def main():
             _, m_classif['sensibilité'][index], m_classif['specificité'][index] = test.confusion_matrix('classif')
 
             var_time = timing()
-            # Segmenation
+            # SEGMENTATION
             test.sliding_window(window_size, pad_h=window_size, pad_v=window_size, threshold=0.8)
+            # Predict
             test.segmentation_predict(segm_model, test.crops, threshold=0.99)
             plt.savefig(img_dir+'test_segm_'+niv_str)
             _, m_segm['sensibilité'][index], m_segm['specificité'][index] = test.confusion_matrix('segm')

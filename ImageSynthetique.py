@@ -352,25 +352,35 @@ class Image:
         self.predicted['segm'] = np.where(predicted_image > threshold, 1, 0)
         plt.figure(figsize=(16, 7.5))
         ax = plt.gca()
-        plt.imshow(self.predicted['segm'])
-        plt.imshow(self.segmentation, alpha=0.5)
+        # plt.imshow(self.predicted['segm'])
+        # plt.imshow(self.segmentation, alpha=0.5)
         plt.xticks(np.arange(0,self.width, 32))
         plt.yticks(np.arange(0,self.height, 32))
-        img = np.copy(self.predicted['classif'])
-        img[self.predicted['segm']>0] = 2.0
-        t = 1 # alpha value
-        cmap = {0:[1.,1.0,1.0,t],1:[0.3,0.3,1.0,t],2:[0.5,0.1,0.3,t]}
-        labels = {0:'',1:'Masque de classification',2:'Masque de segmentation'}
+        img = np.zeros_like(self.image)
+
+        fp = np.logical_or(np.logical_not(self.predicted['segm']), self.segmentation[:, :, 0]) == 0
+        fn = np.logical_or(self.predicted['segm'], np.logical_not(self.segmentation[:, :, 0])) == 0
+        tp = np.logical_and(self.predicted['segm'], self.segmentation[:, :, 0]) > 0
+
+        img[fp] = 1.0
+        img[fn] = 2.0
+        img[tp] = 3.0
+
+        lightgreen = np.array([121, 210, 121])/255.
+        darkred = np.array([153, 0, 0])/255.
+        darkgreen = np.array([45, 134, 45])/255.
+        lightred = np.array([255, 51, 51])/255.
+
+        cmap = {0: lightgreen, 1: lightred, 2: darkred, 3: darkgreen}
+        labels = {0: 'Vrai négatif', 2: 'Faux négatif', 1: 'Fausse positif', 3: 'Vraie positif'}
         arrayShow = np.array([[cmap[i] for i in j] for j in img])
-        cmap = {1: cmap[1],2:cmap[2]}
-        ## create patches as legend
-        patches_ =[patches.Patch(color=cmap[i],label=labels[i]) for i in cmap]
+        # create patches as legend
+        patches_ =[patches.Patch(color=cmap[i], label=labels[i]) for i in cmap]
         # plt.imshow(segm)
         plt.imshow(arrayShow)
         plt.legend(handles=patches_, loc=4, borderaxespad=0.)
 
-        ax.grid(which='both')
-        #plt.show()
+        ax.grid(which='both', color='black')
         pass
 
     def compare_predicted(self):
