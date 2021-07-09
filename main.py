@@ -22,6 +22,22 @@ def timing(part='', start=None):
         print("Part %s took %1.2fs" % (part, (time.time() - start)))
     return time.time()
 
+def plot_metrics(range, m_classif, m_segm):
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8), constrained_layout=True, sharex=True)
+    ax1.title.set_text('Classification')
+    ax1.plot(range, m_classif['sensibilité'], label='Sensibilité')
+    ax1.set_xlim(xmin=range.min(), xmax=range.max())
+    ax1.set_ylim(ymin=0.5, ymax=1)
+    ax1.plot(range, m_classif['specificité'], label='Specificité')
+    ax1.legend(loc='lower right')
+
+    ax2.title.set_text('Segmentation')
+    ax2.plot(range, m_segm['sensibilité'], label='Sensibilité')
+    ax2.set_ylim(ymin=0.5, ymax=1)
+    ax2.plot(range, m_segm['specificité'], label='Specificité')
+    ax2.legend(loc='lower right')
+    ax2.set_xlabel('Niveau de bruit (0-1)')
+    pass
 
 def main():
     """Run main."""
@@ -131,29 +147,8 @@ def main():
 
         noise_min, noise_max = float(sys.argv[2]), float(sys.argv[3])
         range = np.arange(noise_min, noise_max+0.1, 0.1).round(1)
-
-        fig, (ax1, ax2) = plt.subplots(2,1, figsize=(8,8), constrained_layout=True, sharex=True)
-        ax1.title.set_text('Classification')
-        ax1.plot(range, m_classif['sensibilité'], label='Sensibilité')
-        ax1.set_xlim(xmin=noise_min, xmax=noise_max)
-        ax1.set_ylim(ymin=0.5, ymax=1)
-        ax1.plot(range, m_classif['specificité'], label='Specificité')
-        ax1.legend(loc='lower right')
-
-        ax2.title.set_text('Segmentation')
-        ax2.plot(range, m_segm['sensibilité'], label='Sensibilité')
-        ax2.set_ylim(ymin=0.5, ymax=1)
-        ax2.plot(range, m_segm['specificité'], label='Specificité')
-        ax2.legend(loc='lower right')
+        plot_metrics(range, m_classif, m_segm)
         plt.savefig(img_dir+'sens_spec')
-
-        plt.figure(figsize=(10, 5), constrained_layout=True)
-        plt.gca().title.set_text('Classification')
-        plt.plot(range, m_classif['sensibilité'], label='Sensibilité')
-        plt.gca().set_xlim(xmin=noise_min, xmax=noise_max)
-        plt.gca().set_ylim(ymin=0.8, ymax=1)
-        plt.plot(range, m_classif['specificité'], label='Specificité')
-        plt.legend(loc='lower right')
 
 
 
