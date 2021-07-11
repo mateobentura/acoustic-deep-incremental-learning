@@ -45,16 +45,18 @@ class Image:
             noise_lvl (float): percentage of maximum grayscale value
             seed (int): optional seed that determines random state
         """
-        self.image = np.ones((self.height, self.width), np.float32) * 2
+        self.image = np.zeros((self.height, self.width), np.float32)
         self.noisy(noise_lvl*255, seed)
         self.mask = np.zeros((self.height, self.width), np.uint8)
         self.segmentation = np.zeros(self.mask.shape+(classes,))
         self.classes = classes
         pass
 
-    def clip(self):
-        """Clip image to maximum (255)."""
-        self.image = np.clip(self.image, 0, 255)
+    def limit(self):
+        """Limit image to [0, 255]."""
+        self.image -= self.image.min()
+        print(self.image.max())
+        self.image /= self.image.max() / 255
         pass
 
     def noisy(self, intensity, seed):
@@ -65,10 +67,9 @@ class Image:
             seed (int): optional seed that determines random state
         """
         np.random.seed(seed)
-        random = np.random.randint(0, intensity, size=(self.height, self.width))
-        # random = np.random.normal(loc=intensity / 4,
-        #                         scale=intensity / 4,
-        #                         size=(self.height, self.width)).round()
+        random = np.random.normal(loc=0,
+                                scale=intensity,
+                                size=(self.height, self.width)).round()
         self.image += random
         pass
 
@@ -127,7 +128,6 @@ class Image:
         #
         # self.image = cv2.bitwise_and(self.image, self.image, mask = mask_2)
         self.image = cv2.add(self.image, image_resize)
-        self.clip()
         self.objects.append({'type': 'ladder',
                             'coords': (rect_top, rect_bottom),
                             'spacing': spacing // times,
@@ -168,7 +168,6 @@ class Image:
         self.image[y_m:y_p, x_m:x_p] = cv2.add(self.image[y_m:y_p, x_m:x_p], circle)
         _, segmentation = cv2.threshold(circle, intensity-1, 255, cv2.THRESH_BINARY)
         self.segmentation[y_m:y_p, x_m:x_p, 1] = segmentation
-        self.clip()
         pass
 
     def plot_masked(self):
