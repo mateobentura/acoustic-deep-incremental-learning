@@ -223,6 +223,27 @@ class Image:
         self.clip()
         pass
 
+    def add_vline(self, starting_pt, length, intensity, thickness=10):
+        self.objects.append({'type': 'vline',
+                            'starting point': starting_pt,
+                            'intensity': intensity,
+                            'length': length,
+                            'thickness': thickness})
+        times = 4
+        big_image = np.zeros((self.height*times, self.width*times), np.float32)
+
+        starting_pt = np.array(starting_pt)
+        self.objects[-1]['coords'] = (tuple(starting_pt-thickness), tuple(starting_pt+thickness+[0, length]))
+        starting_pt *= times
+        length *= times
+        thickness *= times
+
+        big_image = cv2.line(big_image, starting_pt, starting_pt+[0, length], intensity, thickness=thickness)
+
+        image_resize = cv2.resize(big_image, (self.width, self.height))
+        image_resize = cv2.GaussianBlur(image_resize, (7, 7), 50)
+        self.image = cv2.add(self.image, image_resize)
+        pass
 
     def plot_masked(self):
         """Plot image masked."""

@@ -80,6 +80,7 @@ def main():
         # Add lines
         test.add_lines(starting_pt=[320, 100], spacing=30, spacing_var=0.5, thickness=3,
                         lines=5, seed=30)
+        test.add_vline(starting_pt=[400, 10], length=280, intensity=120)
         test.plot_label()
         plt.savefig(img_dir+'test')
         var_time = timing('test', var_time)
