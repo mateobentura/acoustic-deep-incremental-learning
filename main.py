@@ -78,7 +78,7 @@ def main():
         # Add disk
         test.add_disk(center=[180, 50], diameter=5, intensity=0.7)
         # Add lines
-        test.add_lines(starting_pt=[320, 100], spacing=30, spacing_var=0.5, thickness=3,
+        test.add_lines(starting_pt=[320, 50], spacing=50, spacing_var=0.5, thickness=3,
                         lines=5, seed=30)
         test.add_vline(starting_pt=[400, 10], length=280, intensity=120)
         test.plot_label()

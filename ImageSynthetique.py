@@ -266,6 +266,7 @@ class Image:
             h = coords[1][1] - coords[0][1]
             # Display type
             text = f"type: {o['type']}\n"
+            v_align = 'top'
             if o['type'] == 'ladder':
                 if with_coords:
                     # Display minimum and maximum vertical coordinates
@@ -276,7 +277,6 @@ class Image:
                 text += 'length: {}±{}\n'.format(o['length'], o['length_var'])
                 # Number of lines
                 text += format_text(o, 'lines', new_line=False)
-                v_align = 'top'
             elif o['type'] == 'disk':
                 # Display center coordinates
                 text += 'center: ({}, {})\n'.format(o['center'][1], o['center'][0])
@@ -298,8 +298,16 @@ class Image:
                 text += 'length: {}±{}\n'.format(o['length'], o['length_var'])
                 # Number of lines
                 text += format_text(o, 'lines', new_line=False)
-                v_align = 'top'
-
+            elif o['type'] == 'vline':
+                if with_coords:
+                    # Display minimum and maximum vertical coordinates
+                    text += 'y: ({}:{})\n'.format(o['starting point'][1], o['starting point'][1]+o['length'])
+                # Display line intensity
+                text += format_text(o, 'intensity')
+                # Display length
+                text += format_text(o, 'length')
+                # Display line thickness
+                text += format_text(o, 'thickness', new_line=False)
             plt.gca().add_patch(patches.Rectangle(pt, w, h,
                                                 linewidth=1, edgecolor='r',
                                                 facecolor='none'))

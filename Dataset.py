@@ -75,7 +75,7 @@ def classification_model(img_shape, fine_tune_layers=0, dropout=False):
     inputs = keras.Input(shape=img_shape)
     x = inputs
     if img_shape[0] != 32:
-        x = keras.layers.experimental.preprocessing.Resizing(32,32)(x)
+        x = keras.layers.experimental.preprocessing.Resizing(32, 32)(x)
     # Convolve to adapt to 3-channel input
     x = keras.layers.Conv2D(3, (3, 3), padding='same')(x)
     # Pre-processing
