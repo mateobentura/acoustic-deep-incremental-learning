@@ -1,22 +1,11 @@
 import ImageSynthetique as imsy
+from ImageSynthetique import timing
 import Dataset as ds
 import sys
 import time
 import matplotlib.pyplot as plt
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
-
-def timing(part='', start=None):
-    """Time code sections.
-
-    args:
-        part - str
-        start - timestamp
-    """
-    if start is not None:
-        print("Part %s took %1.2fs" % (part, (time.time() - start)))
-    return time.time()
 
 
 def main():
@@ -62,7 +51,6 @@ def main():
                             spacing=spacing, length=12,
                             l_var=2, lines=4*(55//spacing))
 
-        test.add_disk([100, 280], 5, 0.3)
         test.plot_label()
         plt.savefig(img_dir+'test')
         var_time = timing('test', var_time)

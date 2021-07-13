@@ -1,5 +1,6 @@
 import matplotlib.patches as patches
 import seaborn as sns
+import time
 import tensorflow as tf
 import cv2
 import numpy as np
@@ -17,6 +18,19 @@ plt.rcParams.update(params)
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 
+
+def timing(part='', start=None):
+    """Time code sections.
+
+    args:
+        part - str
+        start - timestamp
+    """
+    if start is not None:
+        print("Part %s took %1.2fs" % (part, (time.time() - start)))
+    return time.time()
+
+
 class Image:
     """Docstring for Image class, with methods for generating a custom image.
 
@@ -27,24 +41,25 @@ class Image:
         seed (int): optional seed that determines random state
     """
 
-    def __init__(self, height, width=640, noise_lvl=0.3, seed=None):
+    def __init__(self, height, width=640, noise_lvl=0.3, seed=None, classes=1):
         """Initialize Image object with height and width."""
         # super(Image, self).__init__()
         self.height = height
         self.width = width
-        self.create_image(noise_lvl, seed)
+        self.create_image(noise_lvl, seed, classes)
         self.objects = []
         self.lines = []
         self.predicted = {}
+        self.labels = {}
 
-    def create_image(self, noise_lvl, seed, classes=2):
+    def create_image(self, noise_lvl, seed, classes):
         """Generate canvas for image.
 
         params:
             noise_lvl (float): percentage of maximum grayscale value
             seed (int): optional seed that determines random state
         """
-        self.image = np.ones((self.height, self.width), np.float32) * 2
+        self.image = np.zeros((self.height, self.width), np.float32)
         self.noisy(noise_lvl*255, seed)
         self.mask = np.zeros((self.height, self.width), np.uint8)
         self.segmentation = np.zeros(self.mask.shape+(classes,))
@@ -52,7 +67,7 @@ class Image:
         pass
 
     def clip(self):
-        """Clip image to maximum (255)."""
+        """Limit image to [0, 255]."""
         self.image = np.clip(self.image, 0, 255)
         pass
 
@@ -64,8 +79,8 @@ class Image:
             seed (int): optional seed that determines random state
         """
         np.random.seed(seed)
-        random = np.random.normal(loc=intensity / 2,
-                                scale=intensity / 2,
+        random = np.random.normal(loc=0,
+                                scale=intensity,
                                 size=(self.height, self.width)).round()
         self.image += random
         pass
@@ -99,7 +114,7 @@ class Image:
             seeds = np.random.randint(1024, size=lines)
         for line in range(lines):
             if seed is not None: np.random.seed(seeds[line])
-            intensity = np.random.randint(min_intensity, 220)
+            intensity = np.random.randint(min_intensity, 180)
             if seed is not None: np.random.seed(seeds[line])
             thickness = np.random.randint(times, 2*times)
             if seed is not None: np.random.seed(seeds[line])
@@ -125,7 +140,6 @@ class Image:
         #
         # self.image = cv2.bitwise_and(self.image, self.image, mask = mask_2)
         self.image = cv2.add(self.image, image_resize)
-        self.clip()
         self.objects.append({'type': 'ladder',
                             'coords': (rect_top, rect_bottom),
                             'spacing': spacing // times,
@@ -166,7 +180,6 @@ class Image:
         self.image[y_m:y_p, x_m:x_p] = cv2.add(self.image[y_m:y_p, x_m:x_p], circle)
         _, segmentation = cv2.threshold(circle, intensity-1, 255, cv2.THRESH_BINARY)
         self.segmentation[y_m:y_p, x_m:x_p, 1] = segmentation
-        self.clip()
         pass
 
     def plot_masked(self):
@@ -226,10 +239,9 @@ class Image:
         self.pad_h, self.pad_v = (pad_h, pad_v)
         windows_h = (self.width - window_size) // pad_h +1
         windows_v = (self.height - window_size) // pad_v +1
-        crops = np.zeros((windows_v, windows_h, window_size, window_size))
-        labels = np.zeros((windows_v, windows_h, self.classes))
-        segmentation_crops = np.zeros((windows_v, windows_h, window_size, window_size, self.classes))
-        number = np.zeros_like(labels)
+        self.crops = np.zeros((windows_v, windows_h, window_size, window_size))
+        self.labels['classif'] = np.zeros((windows_v, windows_h, self.classes))
+        self.labels['segm'] = np.zeros((windows_v, windows_h, window_size, window_size, self.classes))
         max = self.mask.max()
         for j in range(windows_v):
             y_m = j*pad_v
@@ -238,18 +250,14 @@ class Image:
                 x_m = i*pad_h
                 x_p = i*pad_h + window_size
                 crop = self.image[y_m:y_p, x_m:x_p]
-                crops[j, i, :, :] = crop
+                self.crops[j, i, :, :] = crop
                 mask_crop = self.mask[y_m:y_p, x_m:x_p]
-                # if mask_crop[mask_crop>0].size > threshold:
-                #     labels[j,i] = 1
-                # labels[j,i] = mask_crop[mask_crop>0].size
                 if mask_crop[mask_crop > 0].size:
                     segmentation_crop = self.segmentation[y_m:y_p, x_m:x_p]
                     if mask_crop[mask_crop > 0].size > threshold * max:
-                        labels[j, i] = 1
-                    segmentation_crops[j, i] = segmentation_crop
-
-        return crops, labels, number, segmentation_crops
+                        self.labels['classif'][j, i] = 1
+                    self.labels['segm'][j, i] = segmentation_crop
+        pass
 
     def compare_labels(self, resampled_labels, threshold):
         self.predicted['classif'] = self.resize_labels(resampled_labels)
@@ -306,7 +314,7 @@ class Image:
     def calssification_predict(self, model, ds_test, shape, threshold):
         predicted_labels = model.predict(ds_test.batch(32))
         predict = predicted_labels.reshape(shape)
-        predict_thr = np.where(predict > threshold, 1, 0)
+        self.predicted['classif'] = np.where(predict > threshold, 1, 0)
         plt.figure(figsize=(20, 5))
         plt.subplot(121)
         for obj in self.objects:
@@ -326,9 +334,9 @@ class Image:
 
         plt.imshow(predict, vmin=0, vmax=1)
         plt.subplot(122)
-        plt.imshow(predict_thr, vmin=0, vmax=1)
+        plt.imshow(self.predicted['classif'], vmin=0, vmax=1)
         plt.yticks([])
-        return predict_thr
+        pass
 
 
 
@@ -353,12 +361,37 @@ class Image:
                 x_p = (col+1)*self.window_size
                 predicted_image[y_m:y_p,x_m:x_p] = predicted[row,col]
         self.predicted['segm'] = np.where(predicted_image > threshold, 1, 0)
-        plt.imshow(self.predicted['segm'])
-        plt.imshow(self.segmentation, alpha=0.5)
+        plt.figure(figsize=(16, 7.5))
+        ax = plt.gca()
+        # plt.imshow(self.predicted['segm'])
+        # plt.imshow(self.segmentation, alpha=0.5)
         plt.xticks(np.arange(0,self.width, 32))
         plt.yticks(np.arange(0,self.height, 32))
-        plt.grid(color='black')
-        #plt.show()
+        img = np.zeros_like(self.image)
+
+        fp = np.logical_or(np.logical_not(self.predicted['segm']), self.segmentation[:, :, 0]) == 0
+        fn = np.logical_or(self.predicted['segm'], np.logical_not(self.segmentation[:, :, 0])) == 0
+        tp = np.logical_and(self.predicted['segm'], self.segmentation[:, :, 0]) > 0
+
+        img[fp] = 1.0
+        img[fn] = 2.0
+        img[tp] = 3.0
+
+        lightgreen = np.array([5, 91, 252])/255.
+        darkred = np.array([153, 0, 0])/255.
+        darkgreen = np.array([255, 151, 15])/255.
+        lightred = np.array([255, 51, 51])/255.
+
+        cmap = {0: lightgreen, 1: lightred, 2: darkred, 3: darkgreen}
+        labels = {0: 'Vrai négatif', 2: 'Faux négatif', 1: 'Fausse positif', 3: 'Vraie positif'}
+        arrayShow = np.array([[cmap[i] for i in j] for j in img])
+        # create patches as legend
+        patches_ =[patches.Patch(color=cmap[i], label=labels[i]) for i in cmap]
+        # plt.imshow(segm)
+        plt.imshow(arrayShow)
+        plt.legend(handles=patches_, loc=4, borderaxespad=0.)
+
+        ax.grid(which='both', color='black')
         pass
 
     def compare_predicted(self):
@@ -402,34 +435,34 @@ class Image:
     def confusion_matrix(self, type):
         plt.figure(figsize=(4.5,3))
         predicted = self.predicted[type].reshape(-1)
-
-        if type == 'segm':
-            mask = self.segmentation.reshape(-1)/255
-        elif type == 'classif':
-            mask = self.mask.reshape(-1)/255
-
-        cf_matrix = tf.math.confusion_matrix(mask, predicted).numpy()
-        group_names = ["Vrai fond", "Fausse échelle", "Faux fond", "Vraie échelle"]
-        group_counts = ["{0:0.0f}".format(value) for value in
-                        cf_matrix.flatten()]
-        group_counts[-1] += ' ('+str(sum(cf_matrix[1, :]))+')'
-        cf_labels = [f"{v1}\n{v2}" for v1, v2 in zip(group_names, group_counts)]
-
-        cf_labels = np.asarray(cf_labels).reshape(2, 2)
-
-        sns.heatmap(cf_matrix,
-                    annot=cf_labels, fmt="",
-                    cmap=['lightgray'], cbar=False,
-                    linewidths=0.5, linecolor='black',
-                    square=True,
-                    xticklabels=['Fond', 'Échelle'], yticklabels=['Fond', 'Échelle'])
-
-        plt.ylabel('Label réel')
-        plt.xlabel('Label prédit')
-        sensibilite = cf_matrix[1, 1] / (cf_matrix[1, 1] + cf_matrix[0, 1])
-        specificite = cf_matrix[0, 0] / (cf_matrix[0, 0] + cf_matrix[1, 0])
+        if type == 'classif':
+            labels = self.labels[type].reshape(-1)
+        else:
+            labels = self.segmentation.reshape(-1)
+            labels /= labels.max()
+        cf_matrix = tf.math.confusion_matrix(labels, predicted).numpy()
+        # group_names = ["Vrai fond", "Fausse échelle", "Faux fond", "Vraie échelle"]
+        # group_counts = ["{0:0.0f}".format(value) for value in
+        #                 cf_matrix.flatten()]
+        # group_counts[-1] += ' ('+str(sum(cf_matrix[1, :]))+')'
+        # cf_labels = [f"{v1}\n{v2}" for v1, v2 in zip(group_names, group_counts)]
+        #
+        # cf_labels = np.asarray(cf_labels).reshape(2, 2)
+        #
+        # sns.heatmap(cf_matrix,
+        #             annot=cf_labels, fmt="",
+        #             cmap=['lightgray'], cbar=False,
+        #             linewidths=0.5, linecolor='black',
+        #             square=True,
+        #             xticklabels=['Fond', 'Échelle'], yticklabels=['Fond', 'Échelle'])
+        #
+        # plt.ylabel('Label réel')
+        # plt.xlabel('Label prédit')
+        print(cf_matrix)
+        sensibilite = cf_matrix[1, 1] / (cf_matrix[1, 1] + cf_matrix[1, 0])
+        specificite = cf_matrix[0, 0] / (cf_matrix[0, 0] + cf_matrix[0, 1])
         print('Sensibilité : '+str(sensibilite))
-        print('Specificité : '+str(specificite))
+        print('Spécificité : '+str(specificite))
         return cf_matrix, sensibilite, specificite
 
 
