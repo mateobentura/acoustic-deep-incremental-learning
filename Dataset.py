@@ -2,7 +2,7 @@ import tensorflow as tf
 # import tensorflow_datasets as tfds
 from tensorflow import keras
 import numpy as np
-# import segmentation_models as sm
+import segmentation_models as sm
 
 
 def to_one_hot(image, label):
@@ -97,7 +97,7 @@ def classification_model(img_shape, fine_tune_layers=0, dropout=False):
         base_model.trainable = False
 
     # Create new model on top
-    inputs = keras.Input(shape=img_shape)
+    inputs = keras.Input(shape=img_shape+(1,))
     x = inputs
     if img_shape[0] != 32:
         x = keras.layers.experimental.preprocessing.Resizing(32,32)(x)
