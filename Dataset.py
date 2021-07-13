@@ -1,8 +1,11 @@
+import os
+os.environ['SM_FRAMEWORK'] = 'tf.keras'
 import tensorflow as tf
 # import tensorflow_datasets as tfds
 from tensorflow import keras
 import numpy as np
 import segmentation_models as sm
+
 
 
 def to_one_hot(image, label):
@@ -57,7 +60,7 @@ def crops_to_dataset(crops, labels, balanced=False, split=False, shuffle=True):
         return ds.prefetch(32)
 
 
-class ClassifModel(keras.Model):
+class MetaModel(keras.Model):
     """Define custom Model class to edit training stage."""
     def train_step(self, image, window_size=32, pad_h=1, pad_v=1):
         """Define custom training step."""
@@ -81,8 +84,14 @@ class ClassifModel(keras.Model):
         # Return a dict mapping metric names to current value
         return {m.name: m.result() for m in self.metrics}
 
+def meta_model(img_shape):
+    input = keras.Input(shape=img_shape+(1,))
+    out_classif = classification_model(img_shape, input)
+    out_segm = segmentation_model(img_shape, input)
+    model = MetaModel(input, [out_classif, out_segm], name='meta_model')
+    return model
 
-def classification_model(img_shape, fine_tune_layers=0, dropout=False):
+def classification_model(img_shape, input, fine_tune_layers=0, dropout=False):
     base_model = keras.applications.ResNet50(
       weights="imagenet",  # Load weights pre-trained on ImageNet.
       input_shape=(32, 32, 3),
@@ -96,9 +105,7 @@ def classification_model(img_shape, fine_tune_layers=0, dropout=False):
     else:
         base_model.trainable = False
 
-    # Create new model on top
-    inputs = keras.Input(shape=img_shape+(1,))
-    x = inputs
+    x = input
     if img_shape[0] != 32:
         x = keras.layers.experimental.preprocessing.Resizing(32,32)(x)
     # Convolve to adapt to 3-channel input
@@ -113,20 +120,19 @@ def classification_model(img_shape, fine_tune_layers=0, dropout=False):
     if dropout: x = keras.layers.Dropout(0.7)(x)
     x = keras.layers.Dense(256, activation='relu')(x)
     if dropout: x = keras.layers.Dropout(0.7)(x)
-    outputs = keras.layers.Dense(1)(x)
-    model = ClassifModel(inputs, outputs)
+    output = keras.layers.Dense(1)(x)
+    # model = ClassifModel(input, output)
 
-    opt = keras.optimizers.SGD(learning_rate=0.001, momentum=0.9)
-    loss = keras.losses.MeanSquaredError()
-    model.compile(optimizer=opt, loss=loss, metrics=['accuracy'])
-    return model
+    # opt = keras.optimizers.SGD(learning_rate=0.001, momentum=0.9)
+    # loss = keras.losses.MeanSquaredError()
+    # model.compile(optimizer=opt, loss=loss, metrics=['accuracy'])
+    return output
 
 
-def segmentation_model(img_shape, backbone='resnet34', classes=1):
-    inputs = keras.Input(shape=img_shape+(1,))
-    x = keras.layers.Conv2D(3,(3,3), padding='same')(inputs)
+def segmentation_model(img_shape, input, backbone='resnet34', classes=1):
+    x = keras.layers.Conv2D(3, (3, 3), padding='same')(input)
     base_model = sm.Unet(backbone_name=backbone, classes=classes, input_shape=img_shape+(3,), encoder_weights='imagenet', encoder_freeze=True)
-    outputs = base_model(x)
-    model = keras.Model(inputs, outputs, name=base_model.name)
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-    return model
+    output = base_model(x)
+    # model = keras.Model(input, output, name=base_model.name)
+    # model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    return output

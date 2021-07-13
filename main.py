@@ -1,13 +1,12 @@
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['SM_FRAMEWORK'] = 'tf.keras'
 import ImageSynthetique as imsy
 from ImageSynthetique import timing
 import Dataset as ds
 import sys
-import time
 import matplotlib.pyplot as plt
 import numpy as np
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
 def main():
@@ -145,7 +144,6 @@ def train(height, width, img_dir, threshold):
                       verbose=1)
     var_time = timing('classification model training', var_time)
     classif_model.save_weights('classif/classif')
-
 
 
 if __name__ == "__main__":
