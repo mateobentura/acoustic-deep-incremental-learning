@@ -50,7 +50,7 @@ def main():
     img_dir = 'images/'
     BACKBONE = 'resnet34'
     var_time = timing()
-    if sys.argv[1] == 'train': train(height, width)
+    if sys.argv[1] == 'train': train(height, width, img_dir, threshold)
     elif sys.argv[1] == 'test_gen':
         test = imsy.Image(300, noise_lvl=threshold)
         # Premier objet
@@ -70,22 +70,24 @@ def main():
         # Image test
         seed = 500
         img_dir = 'noise_test/'
-        noise_min, noise_max = float(sys.argv[3]), float(sys.argv[4])
-        range = np.arange(noise_min, noise_max+0.05, 0.05).round(2)
+        # noise_min, noise_max = float(sys.argv[3]), float(sys.argv[4])
+        # range = np.arange(noise_min, noise_max+0.05, 0.05).round(2)
+        range = [0.05, 0.10, 0.12, 0.25, 0.35]
         img_shape = (window_size, window_size)
         var_time = timing()
         # Define models
         # Classification
         classif_model = ds.classification_model(img_shape)
-        classif_model.load_weights('weights/classif/classif')
+        classif_model.load_weights('weights/classif_noise/classif')
         # Segmenation
         segm_model = ds.segmentation_model(img_shape, backbone=BACKBONE)
-        segm_model.load_weights('weights/segm/segm')
-        m_classif = {'sensibilité': np.zeros((int(noise_max*20))), 'specificité': np.zeros((int(noise_max*20)))}
-        m_segm = {'sensibilité': np.zeros((int(noise_max*20))), 'specificité': np.zeros((int(noise_max*20)))}
+        segm_model.load_weights('weights/segm_noise/segm')
+        m_classif = {'sensibilité': np.zeros((len(range))), 'specificité': np.zeros(len(range))}
+        m_segm = {'sensibilité': np.zeros(len(range)), 'specificité': np.zeros(len(range))}
         var_time = timing('load models', var_time)
         index = 0
         for noise_lvl in range:
+            print('================================================================')
             test = imsy.Image(300, noise_lvl=noise_lvl, seed=seed)
             # Premier objet
             spacings = [5, 7, 9, 11, 13, 15]
@@ -94,6 +96,8 @@ def main():
                 test.add_ladder(starting_pt=pt,
                                 spacing=spacing, length=12,
                                 l_var=2, lines=4*(55//spacing), seed=seed)
+            # print(test.image[test.image>255].size)
+            test.clip()
             test.plot_label()
             niv_str = ('%.2f' % noise_lvl).replace('.', '_')
             plt.savefig(img_dir+'test_'+niv_str)
@@ -108,7 +112,7 @@ def main():
             plt.savefig(img_dir+'test_classif_'+niv_str)
             plt.close()
             var_time = timing('classification prediction for noise level '+str(noise_lvl), var_time)
-
+            print('================================')
             _, m_classif['sensibilité'][index], m_classif['specificité'][index] = test.confusion_matrix('classif')
 
             var_time = timing()
@@ -118,6 +122,8 @@ def main():
             test.segmentation_predict(segm_model, test.crops, threshold=0.99)
             plt.savefig(img_dir+'test_segm_'+niv_str)
             _, m_segm['sensibilité'][index], m_segm['specificité'][index] = test.confusion_matrix('segm')
+            var_time = timing('segmentation prediction for noise level '+str(noise_lvl), var_time)
+
             index += 1
 
             var_time = timing('test_segm', var_time)
@@ -136,8 +142,7 @@ def main():
         plt.savefig(img_dir+'sens_spec')
 
 
-def train(height, width):
-    global img_dir
+def train(height, width, img_dir, threshold):
     # Image test
     var_time = timing()
     train = imsy.Image(height, width)
@@ -150,29 +155,30 @@ def train(height, width):
     plt.savefig(img_dir + 'train')
     var_time = timing('train', var_time)
 
-    # # Sliding window
-    # window_size = 32
-    # pad_h = 1
-    # pad_v = 1
+    # Sliding window
+    window_size = 32
+    pad_h = 1
+    pad_v = 1
+    img_shape = (window_size, window_size)
+    # Sliding window
+    train.sliding_window(window_size, pad_h, pad_v, threshold)
+    var_time = timing('sliding_window', var_time)
 
-    # crops, labels, number, segmentation_crops = train.sliding_window(window_size, pad_h, pad_v, threshold)
-    # var_time = timing('sliding_window', var_time)
+    train.labels['classif'] /= train.labels['classif'].max()
+    ds_train, ds_val = ds.crops_to_dataset(train.crops, train.labels['classif'], balanced=False, split=True)
+    var_time = timing('crops_to_dataset', var_time)
 
-    # indexes = (40//pad_v,50//pad_h-1)
-    # plt.subplot(121)
-    # plt.imshow(crops[indexes])
-    # plt.subplot(122)
-    # plt.imshow(segmentation_crops[indexes])
-    # plt.savefig(img_dir+'crop')
+    classif_model = ds.classification_model(img_shape)
 
-    # train.compare_labels(labels, threshold)
-    # var_time = timing('compare', var_time)
-    # plt.savefig(img_dir+'compare')
-    # var_time = timing('save', var_time)
-    #
-    # labels /= labels.max()
-    # img_shape = (window_size,window_size,1)
-    # ds_train, ds_val = crops_to_dataset(crops, labels, balanced=False, split=True)
+    epochs = 5
+    classif_model.fit(ds_train.batch(64),
+                      validation_data=ds_val.batch(8),
+                      epochs=epochs,
+                      verbose=1)
+    var_time = timing('classification model training', var_time)
+    classif_model.save_weights('classif/classif')
+
+
 
 if __name__ == "__main__":
     main()

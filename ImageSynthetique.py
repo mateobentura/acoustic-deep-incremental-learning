@@ -52,11 +52,9 @@ class Image:
         self.classes = classes
         pass
 
-    def limit(self):
+    def clip(self):
         """Limit image to [0, 255]."""
-        self.image -= self.image.min()
-        print(self.image.max())
-        self.image /= self.image.max() / 255
+        self.image = np.clip(self.image, 0, 255)
         pass
 
     def noisy(self, intensity, seed):
@@ -102,7 +100,7 @@ class Image:
             seeds = np.random.randint(1024, size=lines)
         for line in range(lines):
             if seed is not None: np.random.seed(seeds[line])
-            intensity = np.random.randint(min_intensity, 220)
+            intensity = np.random.randint(min_intensity, 180)
             if seed is not None: np.random.seed(seeds[line])
             thickness = np.random.randint(times, 2*times)
             if seed is not None: np.random.seed(seeds[line])
@@ -365,9 +363,9 @@ class Image:
         img[fn] = 2.0
         img[tp] = 3.0
 
-        lightgreen = np.array([121, 210, 121])/255.
+        lightgreen = np.array([5, 91, 252])/255.
         darkred = np.array([153, 0, 0])/255.
-        darkgreen = np.array([45, 134, 45])/255.
+        darkgreen = np.array([255, 151, 15])/255.
         lightred = np.array([255, 51, 51])/255.
 
         cmap = {0: lightgreen, 1: lightred, 2: darkred, 3: darkgreen}
@@ -450,7 +448,7 @@ class Image:
         sensibilite = cf_matrix[1, 1] / (cf_matrix[1, 1] + cf_matrix[1, 0])
         specificite = cf_matrix[0, 0] / (cf_matrix[0, 0] + cf_matrix[0, 1])
         print('Sensibilité : '+str(sensibilite))
-        print('Specificité : '+str(specificite))
+        print('Spécificité : '+str(specificite))
         return cf_matrix, sensibilite, specificite
 
 
