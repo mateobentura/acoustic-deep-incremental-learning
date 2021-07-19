@@ -69,19 +69,18 @@ def main():
     elif sys.argv[1] == 'test':
         # Image test
         seed = 500
-        img_dir = 'noise_test/'
-        # noise_min, noise_max = float(sys.argv[3]), float(sys.argv[4])
-        # range = np.arange(noise_min, noise_max+0.05, 0.05).round(2)
+        img_dir = 'test/'
+        if sys.argv[3] == 'noise': img_dir = 'noise_test/'
         range = [0.05, 0.10, 0.12, 0.25, 0.35]
         img_shape = (window_size, window_size)
         var_time = timing()
         # Define models
         # Classification
         classif_model = ds.classification_model(img_shape)
-        classif_model.load_weights('weights/classif_noise/classif')
+        classif_model.load_weights('weights/classif/classif')
         # Segmenation
         segm_model = ds.segmentation_model(img_shape, backbone=BACKBONE)
-        segm_model.load_weights('weights/segm_noise/segm')
+        segm_model.load_weights('weights/segm/segm')
         m_classif = {'sensibilité': np.zeros((len(range))), 'specificité': np.zeros(len(range))}
         m_segm = {'sensibilité': np.zeros(len(range)), 'specificité': np.zeros(len(range))}
         var_time = timing('load models', var_time)
@@ -127,17 +126,16 @@ def main():
             index += 1
 
             var_time = timing('test_segm', var_time)
-        np.savetxt('m_classif', np.array([m_classif['sensibilité'], m_classif['specificité']]))
-        np.savetxt('m_segm', np.array([m_segm['sensibilité'], m_segm['specificité']]))
-    elif sys.argv[1] == 'test_sens':
-        m = np.loadtxt('m_classif')
-        m_classif = {}
-        m_classif['sensibilité'], m_classif['specificité'] = m[0], m[1]
-        m = np.loadtxt('m_segm')
-        m_segm = {}
-        m_segm['sensibilité'], m_segm['specificité'] = m[0], m[1]
-        noise_min, noise_max = float(sys.argv[2]), float(sys.argv[3])
-        range = np.arange(noise_min, noise_max+0.05, 0.05).round(2)
+    #     np.savetxt('m_classif', np.array([m_classif['sensibilité'], m_classif['specificité']]))
+    #     np.savetxt('m_segm', np.array([m_segm['sensibilité'], m_segm['specificité']]))
+    # elif sys.argv[1] == 'test_sens':
+    #     m = np.loadtxt('m_classif')
+    #     m_classif = {}
+    #     m_classif['sensibilité'], m_classif['specificité'] = m[0], m[1]
+    #     m = np.loadtxt('m_segm')
+    #     m_segm = {}
+    #     m_segm['sensibilité'], m_segm['specificité'] = m[0], m[1]
+        range = np.array([0.05, 0.10, 0.12, 0.25, 0.35])
         plot_metrics(range, m_classif, m_segm)
         plt.savefig(img_dir+'sens_spec')
 
