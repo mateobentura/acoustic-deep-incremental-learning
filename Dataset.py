@@ -66,8 +66,6 @@ class MetaModel(keras.Model):
         """Define custom training step."""
         # Unpack the data. Its structure depends on your model and
         # on what you pass to `fit()`.
-        x, y, _, _ = image.sliding_window(window_size, pad_h, pad_v, 0.9)
-
         with tf.GradientTape() as tape:
             y_pred = self(x, training=True)  # Forward pass
             # Compute the loss value
@@ -140,7 +138,8 @@ def classification_model(img_shape, input, classes, fine_tune_layers=0, dropout=
 def segmentation_model(img_shape, input, classes=1, backbone='resnet34'):
     x = keras.layers.Conv2D(3, (3, 3), padding='same')(input)
     base_model = sm.Unet(backbone_name=backbone, classes=classes, input_shape=img_shape+(3,), encoder_weights='imagenet', encoder_freeze=False)
-    output = base_model(x, name='Segmentation')
+    output = base_model(x)
+    base_model._name = 'Segmentation'
     # model = keras.Model(input, output, name=base_model.name)
     # model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     return output
