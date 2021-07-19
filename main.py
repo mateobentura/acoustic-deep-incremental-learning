@@ -105,7 +105,7 @@ def main():
         m_segm['sensibilité'], m_segm['specificité'] = m[0], m[1]
         noise_min, noise_max = float(sys.argv[2]), float(sys.argv[3])
         range = np.arange(noise_min, noise_max+0.05, 0.05).round(2)
-        plot_metrics(range, m_classif, m_segm)
+        # plot_metrics(range, m_classif, m_segm)
         plt.savefig(img_dir+'sens_spec')
 
 

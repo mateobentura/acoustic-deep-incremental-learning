@@ -43,7 +43,7 @@ def crops_to_dataset(crops, labels, balanced=False, split=False, shuffle=True):
 
         ds_size = len(ds.take(count[0]*2))
 
-    # ds = ds.map(to_one_hot)
+    ds = ds.map(to_one_hot)
     if split:
         split = {'train': 0.8, 'val': 0.2}
 
@@ -84,14 +84,22 @@ class MetaModel(keras.Model):
         # Return a dict mapping metric names to current value
         return {m.name: m.result() for m in self.metrics}
 
-def meta_model(img_shape):
+
+def meta_model(img_shape, classes=1):
     input = keras.Input(shape=img_shape+(1,))
-    out_classif = classification_model(img_shape, input)
-    out_segm = segmentation_model(img_shape, input)
+    out_classif = classification_model(img_shape, input, classes)
+    out_segm = segmentation_model(img_shape, input, classes)
     model = MetaModel(input, [out_classif, out_segm], name='meta_model')
+    model.compile(
+    optimizer='adam',
+    loss={
+        'Classification': keras.losses.CategoricalCrossentropy(),
+        'Segmentation': keras.losses.CategoricalCrossentropy(),
+    })
     return model
 
-def classification_model(img_shape, input, fine_tune_layers=0, dropout=False):
+
+def classification_model(img_shape, input, classes, fine_tune_layers=0, dropout=False):
     base_model = keras.applications.ResNet50(
       weights="imagenet",  # Load weights pre-trained on ImageNet.
       input_shape=(32, 32, 3),
@@ -107,7 +115,7 @@ def classification_model(img_shape, input, fine_tune_layers=0, dropout=False):
 
     x = input
     if img_shape[0] != 32:
-        x = keras.layers.experimental.preprocessing.Resizing(32,32)(x)
+        x = keras.layers.experimental.preprocessing.Resizing(32, 32)(x)
     # Convolve to adapt to 3-channel input
     x = keras.layers.Conv2D(3, (3, 3), padding='same')(x)
     # Pre-processing
@@ -120,7 +128,7 @@ def classification_model(img_shape, input, fine_tune_layers=0, dropout=False):
     if dropout: x = keras.layers.Dropout(0.7)(x)
     x = keras.layers.Dense(256, activation='relu')(x)
     if dropout: x = keras.layers.Dropout(0.7)(x)
-    output = keras.layers.Dense(1)(x)
+    output = keras.layers.Dense(classes+1, name='Classification', activation='softmax')(x)
     # model = ClassifModel(input, output)
 
     # opt = keras.optimizers.SGD(learning_rate=0.001, momentum=0.9)
@@ -129,10 +137,10 @@ def classification_model(img_shape, input, fine_tune_layers=0, dropout=False):
     return output
 
 
-def segmentation_model(img_shape, input, backbone='resnet34', classes=1):
+def segmentation_model(img_shape, input, classes=1, backbone='resnet34'):
     x = keras.layers.Conv2D(3, (3, 3), padding='same')(input)
-    base_model = sm.Unet(backbone_name=backbone, classes=classes, input_shape=img_shape+(3,), encoder_weights='imagenet', encoder_freeze=True)
-    output = base_model(x)
+    base_model = sm.Unet(backbone_name=backbone, classes=classes, input_shape=img_shape+(3,), encoder_weights='imagenet', encoder_freeze=False)
+    output = base_model(x, name='Segmentation')
     # model = keras.Model(input, output, name=base_model.name)
     # model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     return output
