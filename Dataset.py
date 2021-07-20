@@ -60,39 +60,39 @@ def crops_to_dataset(crops, labels, balanced=False, split=False, shuffle=True):
         return ds.prefetch(32)
 
 
-class MetaModel(keras.Model):
-    """Define custom Model class to edit training stage."""
-    def train_step(self, image, window_size=32, pad_h=1, pad_v=1):
-        """Define custom training step."""
-        # Unpack the data. Its structure depends on your model and
-        # on what you pass to `fit()`.
-        with tf.GradientTape() as tape:
-            y_pred = self(x, training=True)  # Forward pass
-            # Compute the loss value
-            # (the loss function is configured in `compile()`)
-            loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
-
-        # Compute gradients
-        trainable_vars = self.trainable_variables
-        gradients = tape.gradient(loss, trainable_vars)
-        # Update weights
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-        # Update metrics (includes the metric that tracks the loss)
-        self.compiled_metrics.update_state(y, y_pred)
-        # Return a dict mapping metric names to current value
-        return {m.name: m.result() for m in self.metrics}
+# class MetaModel(keras.Model):
+#     """Define custom Model class to edit training stage."""
+#     def train_step(self, image, window_size=32, pad_h=1, pad_v=1):
+#         """Define custom training step."""
+#         # Unpack the data. Its structure depends on your model and
+#         # on what you pass to `fit()`.
+#         with tf.GradientTape() as tape:
+#             y_pred = self(x, training=True)  # Forward pass
+#             # Compute the loss value
+#             # (the loss function is configured in `compile()`)
+#             loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
+#
+#         # Compute gradients
+#         trainable_vars = self.trainable_variables
+#         gradients = tape.gradient(loss, trainable_vars)
+#         # Update weights
+#         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+#         # Update metrics (includes the metric that tracks the loss)
+#         self.compiled_metrics.update_state(y, y_pred)
+#         # Return a dict mapping metric names to current value
+#         return {m.name: m.result() for m in self.metrics}
 
 
 def meta_model(img_shape, classes=1):
     input = keras.Input(shape=img_shape+(1,))
     out_classif = classification_model(img_shape, input, classes)
     out_segm = segmentation_model(img_shape, input, classes)
-    model = MetaModel(input, [out_classif, out_segm], name='meta_model')
+    model = keras.Model(input, [out_classif, out_segm], name='meta_model')
     model.compile(
     optimizer='adam',
     loss={
         'Classification': keras.losses.CategoricalCrossentropy(),
-        'Segmentation': keras.losses.CategoricalCrossentropy(),
+        'Segmentation': keras.losses.BinaryCrossentropy(),
     })
     return model
 

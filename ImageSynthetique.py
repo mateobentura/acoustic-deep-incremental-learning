@@ -5,6 +5,7 @@ import tensorflow as tf
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from skimage.util import view_as_windows
 params = {'legend.fontsize': 'x-large',
           'figure.figsize': (16, 7.5),
           'axes.labelsize': 'x-large',
@@ -41,7 +42,7 @@ class Image:
         seed (int): optional seed that determines random state
     """
 
-    def __init__(self, height, width=640, noise_lvl=0.3, seed=None, classes=1):
+    def __init__(self, height, width=640, noise_lvl=0.1, seed=None, classes=1):
         """Initialize Image object with height and width."""
         # super(Image, self).__init__()
         self.height = height
@@ -79,7 +80,7 @@ class Image:
             seed (int): optional seed that determines random state
         """
         np.random.seed(seed)
-        random = np.random.normal(loc=0,
+        random = np.random.normal(loc=intensity*2,
                                 scale=intensity,
                                 size=(self.height, self.width)).round()
         self.image += random
@@ -239,24 +240,24 @@ class Image:
         self.pad_h, self.pad_v = (pad_h, pad_v)
         windows_h = (self.width - window_size) // pad_h +1
         windows_v = (self.height - window_size) // pad_v +1
-        self.crops = np.zeros((windows_v, windows_h, window_size, window_size))
-        self.labels['classif'] = np.zeros((windows_v, windows_h, self.classes))
-        self.labels['segm'] = np.zeros((windows_v, windows_h, window_size, window_size, self.classes))
-        max = self.mask.max()
-        for j in range(windows_v):
-            y_m = j*pad_v
-            y_p = j*pad_v + window_size
-            for i in range(windows_h):
-                x_m = i*pad_h
-                x_p = i*pad_h + window_size
-                crop = self.image[y_m:y_p, x_m:x_p]
-                self.crops[j, i, :, :] = crop
-                mask_crop = self.mask[y_m:y_p, x_m:x_p]
-                if mask_crop[mask_crop > 0].size:
-                    segmentation_crop = self.segmentation[y_m:y_p, x_m:x_p]
-                    if mask_crop[mask_crop > 0].size > threshold * max:
-                        self.labels['classif'][j, i] = 1
-                    self.labels['segm'][j, i] = segmentation_crop
+        # self.crops = np.zeros((windows_v, windows_h, window_size, window_size, 1))
+        # self.labels['segm'] = np.zeros((windows_v, windows_h, window_size, window_size, self.classes+1))
+        maximum = self.mask.max()
+        self.crops = view_as_windows(self.image, window_size, step=(pad_h,pad_v))
+        self.labels['segm'] = view_as_windows(self.segmentation, (window_size,window_size, self.classes), step=(pad_h,pad_v, 1)).squeeze()
+        self.labels['segm'] = np.expand_dims(self.labels['segm'], axis=-1)
+
+        self.labels['classif'] = (view_as_windows(self.mask, 32).squeeze()>0).any(axis=(-2,-1)).astype(int)
+        # for j in range(windows_v):
+        #     y_m = j*pad_v
+        #     y_p = j*pad_v + window_size
+        #     for i in range(windows_h):
+        #         x_m = i*pad_h
+        #         x_p = i*pad_h + window_size
+        #         mask_crop = self.mask[y_m:y_p, x_m:x_p]
+        #         if mask_crop[mask_crop > 0].size > 0:
+        #             self.labels['classif'][j, i] = 1
+        # self.labels['classif'] /= 255.
         pass
 
     def compare_labels(self, resampled_labels, threshold):
@@ -465,7 +466,14 @@ class Image:
         print('Spécificité : '+str(specificite))
         return cf_matrix, sensibilite, specificite
 
+    def reshape_labels(self):
+        shp = self.labels['classif'].shape
+        classif = self.labels['classif'].reshape(shp[0]*shp[1])
+        classif = tf.one_hot(classif, self.classes+1)
+        shp = self.labels['segm'].shape
+        segm = self.labels['segm'].reshape(shp[0]*shp[1], shp[2], shp[3], shp[4])
+        return [classif, segm]
 
 def reshape_dataset(dataset):
     shape = dataset.shape
-    return dataset.reshape(shape[0]*shape[1], shape[2], shape[3])
+    return dataset.reshape(shape[0]*shape[1], shape[2], shape[3], shape[4])
