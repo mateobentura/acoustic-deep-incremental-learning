@@ -91,7 +91,7 @@ class MetaModel(keras.Model):
         x, y = data
         for x, y in val_dataset:
             test_step(x_batch_val, y_batch_val)
-        
+
         for epoch in range(epochs):
             print("\nStart of epoch %d" % (epoch,))
 
@@ -220,3 +220,41 @@ def segmentation_model(img_shape, classes=1, backbone='resnet34'):
     model = keras.Model(input, output, name=base_model.name)
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     return model
+
+class DataGenerator(keras.utils.Sequence):
+    def __init__(self, image, window_size=32, step=1, network='classif', batch_size=32):
+        self.network = network
+        self.image = image
+        self.batch_size = batch_size
+        self.window_size = window_size
+        self.mask = np.zeros_like(self.image.image)
+
+    def __len__(self):
+        return np.ceil(((self.image.height-self.window_size)*(self.image.width-self.batch_size))/self.batch_size).astype(int)
+
+    def __getitem__(self, idx):
+        y, x = np.unravel_index([idx*(self.batch_size), (idx+1)*(self.batch_size)-1], (self.image.height, self.image.width-self.batch_size))
+        batch_subimage = self.image.image[y[0]:y[0]+self.window_size, x[0]:x[1]+self.window_size]
+        # print(batch_subimage.shape)
+        # if idx > 530:
+        #     print(((x[0],y[0]),(x[1], y[1])))
+        self.mask[y[0]:y[0]+1, x[0]:x[1]+1] +=1
+        batch_x = view_as_windows(batch_subimage, self.window_size).squeeze()
+        batch_x /= 255.
+        if self.network == 'classif':
+            batch_c = self.image.mask[y[0]:y[0]+self.window_size, x[0]:x[1]+self.window_size].copy()
+            batch_c = view_as_windows(batch_c, self.window_size).squeeze()
+            batch_c = (batch_c>0).any(axis=(-2,-1)).astype(int)
+            batch_y = tf.one_hot(batch_c, self.image.classes+1)
+        elif self.network == 'segm':
+            batch_s = self.image.segmentation[y[0]:y[0]+self.window_size, x[0]:x[1]+self.window_size].copy()
+            batch_y = view_as_windows(batch_s, (self.window_size, self.window_size, self.image.classes))
+            if batch_y.shape[1] != self.batch_size:
+                print('\n')
+                print(batch_y.shape)
+            batch_y = np.reshape(batch_y, (self.batch_size, self.window_size, self.window_size, self.image.classes))
+            batch_y /= 255
+        else:
+            assert True, 'Error'
+            pass
+        return batch_x, batch_y
