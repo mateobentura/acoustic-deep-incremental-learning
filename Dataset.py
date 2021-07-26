@@ -6,16 +6,11 @@ from tensorflow import keras
 import numpy as np
 import segmentation_models as sm
 from skimage.util import view_as_windows
+import matplotlib.pyplot as plt
 
 
-def to_one_hot(image, label):
-    global classes
-    label = tf.one_hot(label, classes, name='label', axis=-1)
-    return image, label
-
-
-def crops_to_dataset(crops, labels, balanced=False, split=False, shuffle=True):
-    images = crops.reshape((crops.shape[0]*crops.shape[1], crops.shape[2], crops.shape[3]))
+def crops_to_dataset(crops, labels, classes=1, balanced=False, split=False, shuffle=True):
+    images = crops.reshape((crops.shape[0]*crops.shape[1], crops.shape[2], crops.shape[3], 1))
     lbs = labels.reshape(-1).astype(int)
     ds = tf.data.Dataset.from_tensor_slices((images, lbs))
     ds_size = len(ds)
@@ -43,7 +38,13 @@ def crops_to_dataset(crops, labels, balanced=False, split=False, shuffle=True):
 
         ds_size = len(ds.take(count[0]*2))
 
+    def to_one_hot(image, label):
+        nonlocal classes
+        label = tf.one_hot(label, classes+1, name='label', axis=-1)
+        return image, label
+
     ds = ds.map(to_one_hot)
+
     if split:
         split = {'train': 0.8, 'val': 0.2}
 
@@ -187,12 +188,13 @@ def classification_model(img_shape, classes=1, fine_tune_layers=0, dropout=False
       include_top=False,
     )  # Do not include the ImageNet classifier at the top.
 
-    # if fine_tune_layers >= 1:
-    #     # Freeze all the layers except for the last `fine_tune_layers`
-    #     for layer in base_model.layers[:-fine_tune_layers]:
-    #         layer.trainable = False
-    # else:
-    base_model.trainable = False
+    if fine_tune_layers > 0:
+        # Freeze all the layers except for the last `fine_tune_layers`
+        for layer in base_model.layers[:-fine_tune_layers]:
+          layer.trainable =  False
+    else:
+        base_model.trainable = False
+
     input = keras.Input(shape=img_shape+(1,))
     x = input
     if img_shape[0] != 32:
@@ -212,9 +214,9 @@ def classification_model(img_shape, classes=1, fine_tune_layers=0, dropout=False
     output = keras.layers.Dense(classes+1, name='Classification', activation='softmax')(x)
     model = keras.Model(input, output)
 
-    opt = keras.optimizers.SGD(learning_rate=0.001, momentum=0.9)
-    loss = keras.losses.MeanSquaredError()
-    model.compile(optimizer=opt, loss=loss, metrics=['accuracy'])
+    opt = keras.optimizers.Adam(learning_rate=0.0001)
+    #loss = keras.losses.CategoricalCrossentropy()
+    model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
     return model
 
 
@@ -229,39 +231,59 @@ def segmentation_model(img_shape, classes=1, backbone='resnet34'):
     return model
 
 class DataGenerator(keras.utils.Sequence):
-    def __init__(self, image, batch_size=32, window_size=32, step=1, network='classif'):
+    def __init__(self, image, batch_size=32, window_size=32, step=1, network='classif', test=False):
         self.network = network
         self.image = image
+        assert batch_size <= image.width-window_size, 'Batch size must be less or equal to width minus window size.'
         self.batch_size = batch_size
         self.window_size = window_size
         self.step = step
         self.mask = np.zeros_like(self.image.image)
 
     def __len__(self):
-        return np.ceil(((self.image.height-self.window_size)*(self.image.width-self.batch_size))/(self.batch_size*self.step)).astype(int)
+        return np.ceil(((self.image.height-self.window_size+1)*(self.image.width-self.window_size+1))/(self.batch_size*self.step**2)).astype(int)
 
     def __getitem__(self, idx):
-        y, x = np.unravel_index([idx*(self.batch_size*self.step), (idx+1)*(self.batch_size*self.step)-1], (self.image.height, self.image.width-self.batch_size//self.step))
-        batch_subimage = self.image.image[y[0]:y[0]+self.window_size, x[0]:x[1]+self.window_size]
-        # print(batch_subimage.shape)
-        # if idx < 15:
+        # print(idx)
+        y, x = np.unravel_index([(idx*self.batch_size*self.step**2), ((idx+1)*self.batch_size*self.step**2)-1], (self.image.height-self.window_size, self.image.width-self.window_size))
+        # print('\n')
+        # print(((x[0],y[0]),(x[1], y[1])))
+        if x[0] > x[1]:
+            x[1] = self.image.width-self.window_size - 1
+
+        batch_subimage = self.image.image[y[0]:y[0]+self.window_size, x[0]:x[1]+self.window_size+1].copy()
+        print(batch_subimage.shape)
+        # if x[0] > 500:
+        #     print('\n')
         #     print(((x[0],y[0]),(x[1], y[1])))
+        # plt.imshow(batch_subimage)
+        # plt.show()
         self.mask[y[0]:y[0]+1, x[0]:x[1]+1] +=1
         batch_x = view_as_windows(batch_subimage, self.window_size, step=self.step)
-        batch_x = np.reshape(batch_x, (self.batch_size, self.window_size, self.window_size, 1))
+        batch_x = np.reshape(batch_x, (batch_x.shape[1], self.window_size, self.window_size, 1))
+        rng = np.random.RandomState()
+        indexes = np.arange(0, batch_x.shape[0]-1)
+        rng.shuffle(indexes)
+        batch_x = batch_x[indexes]
         batch_x /= 255.
         if self.network == 'classif':
             batch_c = self.image.mask[y[0]:y[0]+self.window_size, x[0]:x[1]+self.window_size].copy()
             batch_c = view_as_windows(batch_c, self.window_size, step=self.step).squeeze()
             batch_c = (batch_c>0).any(axis=(-2,-1)).astype(int)
-            batch_y = tf.one_hot(batch_c, self.image.classes+1)
+            batch_c = batch_c[indexes]
+            # print(batch_c.shape)
+            # batch_y = tf.one_hot(batch_c, self.image.classes+1)
+            batch_y = keras.utils.to_categorical(batch_c, self.image.classes+1)
         elif self.network == 'segm':
+            preprocessing_fn = sm.get_preprocessing('resnet34')
+            batch_x = preprocessing_fn(batch_x)
             batch_s = self.image.segmentation[y[0]:y[0]+self.window_size, x[0]:x[1]+self.window_size].copy()
             batch_y = view_as_windows(batch_s, (self.window_size, self.window_size, self.image.classes), step=(self.step, self.step, 1))
-            if batch_y.shape[1] != self.batch_size:
-                print('\n')
-                print(batch_y.shape)
-            batch_y = np.reshape(batch_y, (self.batch_size, self.window_size, self.window_size, self.image.classes))
+            # if batch_y.shape[1] != self.batch_size:
+            #     print('\n')
+            #     print(batch_y.shape)
+            batch_y = np.reshape(batch_y, (batch_y.shape[1], self.window_size, self.window_size, self.image.classes))
+            batch_y = batch_y[indexes]
             batch_y /= 255
         else:
             assert True, 'Error'

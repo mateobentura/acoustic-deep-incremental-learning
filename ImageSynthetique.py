@@ -115,7 +115,7 @@ class Image:
             seeds = np.random.randint(1024, size=lines)
         for line in range(lines):
             if seed is not None: np.random.seed(seeds[line])
-            intensity = np.random.randint(min_intensity, 180)
+            intensity = np.random.randint(min_intensity, 0.5*255)
             if seed is not None: np.random.seed(seeds[line])
             thickness = np.random.randint(times, 2*times)
             if seed is not None: np.random.seed(seeds[line])
@@ -247,7 +247,8 @@ class Image:
         self.labels['segm'] = view_as_windows(self.segmentation, (window_size,window_size, self.classes), step=(pad_h,pad_v, 1)).squeeze()
         self.labels['segm'] = np.expand_dims(self.labels['segm'], axis=-1)
 
-        self.labels['classif'] = (view_as_windows(self.mask, 32).squeeze()>0).any(axis=(-2,-1)).astype(int)
+        self.labels['classif'] = (view_as_windows(self.mask, window_size, step=(pad_h,pad_v)).squeeze()>0)
+        self.labels['classif'] = self.labels['classif'].any(axis=(-2,-1)).astype(int)
         # for j in range(windows_v):
         #     y_m = j*pad_v
         #     y_p = j*pad_v + window_size
@@ -475,5 +476,5 @@ class Image:
         return [classif, segm]
 
 def reshape_dataset(dataset):
-    shape = dataset.shape
-    return dataset.reshape(shape[0]*shape[1], shape[2], shape[3], shape[4])
+    shp = dataset.shape
+    return dataset.reshape((shp[0]*shp[1],) + shp[2:])
