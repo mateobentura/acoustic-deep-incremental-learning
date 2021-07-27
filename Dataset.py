@@ -10,9 +10,10 @@ import matplotlib.pyplot as plt
 
 
 def crops_to_dataset(crops, labels, classes=1, balanced=False, split=False, shuffle=True):
-    images = crops.reshape((crops.shape[0]*crops.shape[1], crops.shape[2], crops.shape[3], 1))
-    lbs = labels.reshape(-1).astype(int)
-    ds = tf.data.Dataset.from_tensor_slices((images, lbs))
+    ds = tf.data.Dataset.from_tensor_slices((
+                train.crops.reshape(-1,32,32,1),
+                keras.utils.to_categorical(train.labels['classif'].reshape(-1), train.classes+1)
+                ))
     ds_size = len(ds)
     if shuffle:
         ds = ds.shuffle(ds_size)
@@ -43,7 +44,7 @@ def crops_to_dataset(crops, labels, classes=1, balanced=False, split=False, shuf
         label = tf.one_hot(label, classes+1, name='label', axis=-1)
         return image, label
 
-    ds = ds.map(to_one_hot)
+    # ds = ds.map(to_one_hot)
 
     if split:
         split = {'train': 0.8, 'val': 0.2}
@@ -214,9 +215,9 @@ def classification_model(img_shape, classes=1, fine_tune_layers=0, dropout=False
     output = keras.layers.Dense(classes+1, name='Classification', activation='softmax')(x)
     model = keras.Model(input, output)
 
-    opt = keras.optimizers.Adam(learning_rate=0.0001)
+    opt = keras.optimizers.Adam(learning_rate=0.001)
     #loss = keras.losses.CategoricalCrossentropy()
-    model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
+    model.compile(loss='binary_crossentropy', optimizer=opt, metrics=['accuracy'])
     return model
 
 

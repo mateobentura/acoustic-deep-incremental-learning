@@ -2,6 +2,7 @@ import os
 os.environ['SM_FRAMEWORK'] = 'tf.keras'
 import ImageSynthetique as imsy
 from ImageSynthetique import timing
+from tensorflow import keras
 import Dataset as ds
 import sys
 import matplotlib.pyplot as plt
@@ -130,8 +131,8 @@ def train(height, width, img_dir, threshold):
     # Sliding window
     train.sliding_window(window_size, pad_h, pad_v, threshold)
     var_time = timing('sliding_window', var_time)
-
-    ds_train, ds_val = ds.crops_to_dataset(train.crops, train.labels['classif'], balanced=False, split=True)
+    
+    ds_train, ds_val = ds.crops_to_dataset(crops, labels, balanced=False, split=True)
     var_time = timing('crops_to_dataset', var_time)
 
     classif_model = ds.classification_model(img_shape)
