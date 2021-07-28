@@ -28,7 +28,10 @@ def timing(part='', start=None):
         start - timestamp
     """
     if start is not None:
-        print("Part %s took %1.2fs" % (part, (time.time() - start)))
+        elapsed = time.time() - start
+        elapsed_min = int(np.floor(elapsed)) // 60
+        elapsed_sec = elapsed - elapsed_min*60
+        print(f"{part} took {elapsed_min}m{elapsed_sec:.2f}s")
     return time.time()
 
 
@@ -47,13 +50,15 @@ class Image:
         # super(Image, self).__init__()
         self.height = height
         self.width = width
-        self.create_image(noise_lvl, seed, classes)
+        self.noise_lvl = noise_lvl
+        self.seed = seed
+        self._create_image(classes)
         self.objects = []
         self.lines = []
         self.predicted = {}
         self.labels = {}
 
-    def create_image(self, noise_lvl, seed, classes):
+    def _create_image(self, classes):
         """Generate canvas for image.
 
         params:
@@ -61,15 +66,9 @@ class Image:
             seed (int): optional seed that determines random state
         """
         self.image = np.zeros((self.height, self.width), np.float32)
-        self.noisy(noise_lvl*255, seed)
         self.mask = np.zeros((self.height, self.width), np.uint8)
         self.segmentation = np.zeros(self.mask.shape+(classes,))
         self.classes = classes
-        pass
-
-    def clip(self):
-        """Limit image to [0, 255]."""
-        self.image = np.clip(self.image, 0, 255)
         pass
 
     def noisy(self, intensity, seed):
@@ -83,7 +82,17 @@ class Image:
         random = np.random.normal(loc=intensity*2,
                                 scale=intensity,
                                 size=(self.height, self.width)).round()
-        self.image += random
+        #self.image += random
+        return np.clip(self.image + random, 0, 255)
+
+    def signaltonoise_dB(self, axis=-1, ddof=0):
+        m = self.image.mean()
+        sd = self.noise_lvl*255
+        return 20*np.log10(m/sd)
+
+    def finish(self):
+        self.image = self.noisy(self.noise_lvl*255, self.seed)
+        print('SNR: %.2fdB' % self.signaltonoise_dB())
         pass
 
     def add_ladder(self, starting_pt, spacing, length, l_var, lines, seed=None):
@@ -477,4 +486,4 @@ class Image:
 
 def reshape_dataset(dataset):
     shp = dataset.shape
-    return dataset.reshape((shp[0]*shp[1],) + shp[2:])
+    return dataset.reshape((-1,) + shp[2:])

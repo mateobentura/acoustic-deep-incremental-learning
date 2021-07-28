@@ -28,7 +28,7 @@ def main():
             test.add_ladder(starting_pt=pt,
                             spacing=spacing, length=12,
                             l_var=2, lines=4*(55//spacing))
-        test.limit()
+        test.finish()
         test.plot_label()
         plt.savefig('test_gen')
         plt.figure()
@@ -65,7 +65,7 @@ def main():
                                 spacing=spacing, length=12,
                                 l_var=2, lines=4*(55//spacing), seed=seed)
             # print(test.image[test.image>255].size)
-            test.clip()
+            test.finish()
             test.plot_label()
             niv_str = ('%.2f' % noise_lvl).replace('.', '_')
             plt.savefig(img_dir+'test_'+niv_str)
@@ -131,7 +131,7 @@ def train(height, width, img_dir, threshold):
     # Sliding window
     train.sliding_window(window_size, pad_h, pad_v, threshold)
     var_time = timing('sliding_window', var_time)
-    
+
     ds_train, ds_val = ds.crops_to_dataset(crops, labels, balanced=False, split=True)
     var_time = timing('crops_to_dataset', var_time)
 

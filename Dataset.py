@@ -3,16 +3,63 @@ os.environ['SM_FRAMEWORK'] = 'tf.keras'
 import tensorflow as tf
 # import tensorflow_datasets as tfds
 from tensorflow import keras
+import tensorflow.keras.backend as K
 import numpy as np
 import segmentation_models as sm
 from skimage.util import view_as_windows
 import matplotlib.pyplot as plt
 
 
+def specificity(y_true, y_pred):
+    """
+    param:
+    y_pred - Predicted labels
+    y_true - True labels
+    Returns:
+    Specificity score
+    """
+    neg_y_true = 1 - y_true
+    neg_y_pred = 1 - y_pred
+    fp = K.sum(neg_y_true * y_pred)
+    tn = K.sum(neg_y_true * neg_y_pred)
+    specificity = tn / (tn + fp + K.epsilon())
+    return specificity
+
+
+METRICS = [
+      keras.metrics.BinaryAccuracy(name='acc'),
+      keras.metrics.Recall(name='sensitivity'),
+      specificity
+]
+
+
+def dice_coef(y_true, y_pred, smooth=1):
+    intersection = K.sum(K.abs(y_true * y_pred), axis=-1)
+    return (2. * intersection + smooth) / (K.sum(K.square(y_true),-1) + K.sum(K.square(y_pred),-1) + smooth)
+
+
+def tversky(y_true, y_pred, smooth=1, alpha=0.7):
+    y_true_pos = K.flatten(y_true)
+    y_pred_pos = K.flatten(y_pred)
+    true_pos = K.sum(y_true_pos * y_pred_pos)
+    false_neg = K.sum(y_true_pos * (1 - y_pred_pos))
+    false_pos = K.sum((1 - y_true_pos) * y_pred_pos)
+    return (true_pos + smooth) / (true_pos + alpha * false_neg + (1 - alpha) * false_pos + smooth)
+
+
+def tversky_loss(y_true, y_pred):
+    return 1 - tversky(y_true, y_pred)
+
+
+def focal_tversky_loss(y_true, y_pred, gamma=0.75):
+    tv = tversky(y_true, y_pred)
+    return K.pow((1 - tv), gamma)
+
+
 def crops_to_dataset(crops, labels, classes=1, balanced=False, split=False, shuffle=True):
     ds = tf.data.Dataset.from_tensor_slices((
-                train.crops.reshape(-1,32,32,1),
-                keras.utils.to_categorical(train.labels['classif'].reshape(-1), train.classes+1)
+                crops.reshape(-1,32,32,1),
+                keras.utils.to_categorical(labels.reshape(-1), classes+1)
                 ))
     ds_size = len(ds)
     if shuffle:
@@ -215,20 +262,26 @@ def classification_model(img_shape, classes=1, fine_tune_layers=0, dropout=False
     output = keras.layers.Dense(classes+1, name='Classification', activation='softmax')(x)
     model = keras.Model(input, output)
 
-    opt = keras.optimizers.Adam(learning_rate=0.001)
+    opt = keras.optimizers.Adam(learning_rate=1e-5)
     #loss = keras.losses.CategoricalCrossentropy()
-    model.compile(loss='binary_crossentropy', optimizer=opt, metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=METRICS)
     return model
 
 
 def segmentation_model(img_shape, classes=1, backbone='resnet34'):
     input = keras.Input(shape=img_shape+(1,))
     x = keras.layers.Conv2D(3, (3, 3), padding='same')(input)
-    base_model = sm.Unet(backbone_name=backbone, classes=classes, input_shape=img_shape+(3,), encoder_weights='imagenet', encoder_freeze=False)
+    base_model = sm.Unet(backbone_name=backbone,
+                        classes=classes,
+                        input_shape=img_shape+(3,),
+                        activation='sigmoid',
+                        encoder_weights='imagenet',
+                        encoder_freeze=False)
     output = base_model(x)
     base_model._name = 'Segmentation'
     model = keras.Model(input, output, name=base_model.name)
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    opt = keras.optimizers.Adam(learning_rate=0.1)
+    model.compile(optimizer=opt, loss=sm.losses.bce_dice_loss, metrics=[dice_coef]+METRICS)
     return model
 
 class DataGenerator(keras.utils.Sequence):
@@ -242,7 +295,7 @@ class DataGenerator(keras.utils.Sequence):
         self.mask = np.zeros_like(self.image.image)
 
     def __len__(self):
-        return np.ceil(((self.image.height-self.window_size+1)*(self.image.width-self.window_size+1))/(self.batch_size*self.step**2)).astype(int)
+        return np.ceil(((self.image.height-self.window_size)*(self.image.width-self.window_size))/(self.batch_size*self.step**2)).astype(int)
 
     def __getitem__(self, idx):
         # print(idx)
@@ -253,7 +306,7 @@ class DataGenerator(keras.utils.Sequence):
             x[1] = self.image.width-self.window_size - 1
 
         batch_subimage = self.image.image[y[0]:y[0]+self.window_size, x[0]:x[1]+self.window_size+1].copy()
-        print(batch_subimage.shape)
+        # print(batch_subimage.shape)
         # if x[0] > 500:
         #     print('\n')
         #     print(((x[0],y[0]),(x[1], y[1])))
@@ -285,7 +338,7 @@ class DataGenerator(keras.utils.Sequence):
             #     print(batch_y.shape)
             batch_y = np.reshape(batch_y, (batch_y.shape[1], self.window_size, self.window_size, self.image.classes))
             batch_y = batch_y[indexes]
-            batch_y /= 255
+            batch_y /= 255.
         else:
             assert True, 'Error'
             pass
