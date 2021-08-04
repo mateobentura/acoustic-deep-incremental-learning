@@ -1,7 +1,8 @@
+
 import matplotlib.patches as patches
-import seaborn as sns
 import time
 import tensorflow as tf
+from tensorflow import keras
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -35,7 +36,7 @@ def timing(part='', start=None):
     return time.time()
 
 
-class Image:
+class ImageSynthetique:
     """Docstring for Image class, with methods for generating a custom image.
 
     params:
@@ -50,6 +51,7 @@ class Image:
         # super(Image, self).__init__()
         self.height = height
         self.width = width
+        self.figsize = ((width+60)/40, height/40)
         self.noise_lvl = noise_lvl
         self.seed = seed
         self._create_image(classes)
@@ -71,7 +73,7 @@ class Image:
         self.classes = classes
         pass
 
-    def noisy(self, intensity, seed):
+    def _noisy(self, intensity, seed):
         """Add noise to blank image.
 
         params:
@@ -85,14 +87,14 @@ class Image:
         #self.image += random
         return np.clip(self.image + random, 0, 255)
 
-    def signaltonoise_dB(self, axis=-1, ddof=0):
+    def _signaltonoise_dB(self, axis=-1, ddof=0):
         m = self.image.mean()
         sd = self.noise_lvl*255
         return 20*np.log10(m/sd)
 
     def finish(self):
-        self.image = self.noisy(self.noise_lvl*255, self.seed)
-        print('SNR: %.2fdB' % self.signaltonoise_dB())
+        self.image = self._noisy(self.noise_lvl*255, self.seed)
+        print('SNR: %.2fdB' % self._signaltonoise_dB())
         pass
 
     def add_ladder(self, starting_pt, spacing, length, l_var, lines, seed=None):
@@ -192,19 +194,13 @@ class Image:
         self.segmentation[y_m:y_p, x_m:x_p, 1] = segmentation
         pass
 
-    def plot_masked(self):
-        """Plot image masked."""
-        masked = cv2.bitwise_and(self.image, self.image, mask=self.mask)
-        plt.imshow(masked, vmin=0, vmax=255)
-        pass
-
     def plot_label(self, with_coords=True):
         """Plot image with labels, shows rectangle around objects and caracteristics.
 
          params:
             with_coords (bool): option to print out minimum and maximum coordinates.
         """
-        plt.figure()
+        plt.figure(figsize=(self.figsize))
         plt.imshow(self.image, vmin=0, vmax=255)
         for o in self.objects:
             coords = o['coords']
@@ -240,11 +236,12 @@ class Image:
                             horizontalalignment='left',
                             verticalalignment=v_align,
                             bbox=dict(facecolor='black', alpha=0.5, pad=pad, linewidth=0))
-        plt.colorbar(shrink=0.85, pad=0.01)
 
+        plt.colorbar(shrink=0.9, pad=0.05, aspect=30, anchor=(0,0.9))
         pass
 
-    def sliding_window(self, window_size, pad_h, pad_v, threshold):
+
+    def sliding_window(self, window_size, pad_h, pad_v, network='classif'):
         self.window_size = window_size
         self.pad_h, self.pad_v = (pad_h, pad_v)
         windows_h = (self.width - window_size) // pad_h +1
@@ -258,22 +255,41 @@ class Image:
 
         self.labels['classif'] = (view_as_windows(self.mask, window_size, step=(pad_h,pad_v)).squeeze()>0)
         self.labels['classif'] = self.labels['classif'].any(axis=(-2,-1)).astype(int)
-        # for j in range(windows_v):
-        #     y_m = j*pad_v
-        #     y_p = j*pad_v + window_size
-        #     for i in range(windows_h):
-        #         x_m = i*pad_h
-        #         x_p = i*pad_h + window_size
-        #         mask_crop = self.mask[y_m:y_p, x_m:x_p]
-        #         if mask_crop[mask_crop > 0].size > 0:
-        #             self.labels['classif'][j, i] = 1
-        # self.labels['classif'] /= 255.
-        pass
+        crops = self.crops.reshape(-1, 32, 32, 1)
+        if network == 'classif':
+            classif = keras.utils.to_categorical(self.labels['classif'].reshape(-1), self.classes+1)
+            return crops, classif
+        elif network == 'segm':
+            segm = view_as_windows(self.segmentation, (window_size,window_size, self.classes), step=(pad_h,pad_v, 1)).squeeze()
+            segm = np.expand_dims(segm, axis=-1)
+            return crops, segm
+
+    def crops_to_dataset(self, batch_size=32, network='classif', balanced=False, split=False, shuffle=True):
+        ds = tf.data.Dataset.from_tensor_slices(self.sliding_window(32, 1, 1, network=network))
+        ds_size = len(ds)
+        if shuffle:
+            ds = ds.shuffle(ds_size)
+
+        if split:
+            split = {'train': 0.8, 'val': 0.2}
+
+            for i in split:
+                split[i] = int(split[i] * ds_size)
+
+            ds_train = ds.take(split['train'])
+            ds_val = ds.take(split['val'])
+
+            ds_train = ds_train.prefetch(batch_size)
+            ds_val = ds_val.prefetch(batch_size//2)
+            return ds_train, ds_val
+        else:
+            return ds.prefetch(batch_size)
+
 
     def compare_labels(self, resampled_labels, threshold):
-        self.predicted['classif'] = self.resize_labels(resampled_labels)
+        self.predicted['classif'] = self._resize_labels(resampled_labels)
 
-        fig = plt.figure()
+        fig = plt.figure(figsize=(self.figsize))
         ax = fig.gca()
         ax.tick_params(
             which='major',      # both major and minor ticks are affected
@@ -308,7 +324,7 @@ class Image:
         # ax.grid(which='major', alpha=0.5, color='black')
         pass
 
-    def resize_labels(self, labels):
+    def _resize_labels(self, labels):
         labels_resize = np.zeros_like(self.mask, np.float32)
 
         obj = np.array(np.where(labels>0))
@@ -350,7 +366,6 @@ class Image:
         pass
 
 
-
     def segmentation_predict(self, model, crops, threshold):
         """Function that shows prediction results.
         input:
@@ -372,7 +387,7 @@ class Image:
                 x_p = (col+1)*self.window_size
                 predicted_image[y_m:y_p,x_m:x_p] = predicted[row,col]
         self.predicted['segm'] = np.where(predicted_image > threshold, 1, 0)
-        plt.figure(figsize=(16, 7.5))
+        plt.figure(figsize=self.figsize)
         ax = plt.gca()
         # plt.imshow(self.predicted['segm'])
         # plt.imshow(self.segmentation, alpha=0.5)
@@ -394,7 +409,7 @@ class Image:
         lightred = np.array([255, 51, 51])/255.
 
         cmap = {0: lightgreen, 1: lightred, 2: darkred, 3: darkgreen}
-        labels = {0: 'Vrai négatif', 2: 'Faux négatif', 1: 'Fausse positif', 3: 'Vraie positif'}
+        labels = {0: 'Vrai négatif', 2: 'Faux négatif', 1: 'Faux positif', 3: 'Vrai positif'}
         arrayShow = np.array([[cmap[i] for i in j] for j in img])
         # create patches as legend
         patches_ =[patches.Patch(color=cmap[i], label=labels[i]) for i in cmap]
@@ -406,7 +421,7 @@ class Image:
         pass
 
     def compare_predicted(self):
-        fig = plt.figure()
+        fig = plt.figure(figsize=self.figsize)
         ax = fig.gca()
         ax.tick_params(
             which='major',      # both major and minor ticks are affected
@@ -483,6 +498,62 @@ class Image:
         shp = self.labels['segm'].shape
         segm = self.labels['segm'].reshape(shp[0]*shp[1], shp[2], shp[3], shp[4])
         return [classif, segm]
+
+    def test_train(self, classification_model, segmentation_model, learn=False, threshold=0.9):
+        if self.pad_h != 32:
+            self.sliding_window(32,32,32,0.9)
+        var_time = timing()
+        print('Testing with classification model')
+        y_pred = classification_model.predict(self.crops.reshape(-1,32,32,1))
+        y_pred = np.reshape(y_pred, self.crops.shape[:2]+(2,))
+        indexes = np.where(y_pred>threshold)[:2]
+        classified_crops = np.expand_dims(self.crops[indexes], axis=-1)
+        mask = np.argmax(y_pred, axis=-1)
+        unsupervised_labels = np.argmax(y_pred[indexes], axis=-1)
+        mask[indexes] = unsupervised_labels + 2
+        plt.figure(figsize=self.figsize)
+        cmap = {0:[0.8,0.8,1.0,1], 1:[1,0.4,1,1], 2:[0.3,0.3,1.0,1], 3:[0.5,0.1,0.3,1]}
+        labels = {0:'Fond (faible)', 1: 'Échelle (faible)', 2:'Fond détecté', 3:' Échelle détectée'}
+        arrayShow = np.array([[cmap[i] for i in j] for j in mask])
+        ## create patches as legend
+        patches_ =[patches.Patch(color=cmap[i],label=labels[i]) for i in cmap]
+        plt.imshow(arrayShow)
+        plt.legend(handles=patches_, loc=4, borderaxespad=0.)
+        plt.savefig('images/test_train_classif')
+        print('Exemples avec une réponse forte: {}'.format(classified_crops.shape[0]))
+        plt.show()
+        if learn:
+            print('Updating network with new examples')
+            unsupervised_labels = keras.utils.to_categorical(unsupervised_labels, y_pred.shape[-1])
+            classification_model.fit(classified_crops, unsupervised_labels, epochs=2)
+            var_time = timing('classification training', var_time)
+
+        # print('Training segmentation model')
+        #plt.imshow(datagen_s.mask)
+        var_time = timing('segmentation training')
+        results = segmentation_model.evaluate(self.crops.reshape(-1,32,32,1), self.labels['segm'].reshape(-1,32,32,1)/255, verbose=0)
+        y_pred = segmentation_model.predict(self.crops.reshape(-1,32,32,1))
+        mask = y_pred
+        # mask = np.zeros_like(y_pred)
+        # mask[np.where(y_pred > threshold)] +=1
+        # print(mask.shape)
+        mask = mask.reshape(self.height//32, self.width//32, 32, 32, 1)
+        mask = mask.swapaxes(1, 2)
+        mask = mask.reshape((self.height//32)*32, (self.width//32)*32,1)
+        plt.imshow(mask[:,:,0])
+        text = ''
+        for i,name in enumerate(segmentation_model.metrics_names):
+            if i != 0:
+                text += f"{name}: {results[i]:.4f}\n"
+        text = text[:-2]
+        pad = 5
+        plt.gca().text(pad*2, self.height-100+pad/2, text,
+                        color='white',
+                        horizontalalignment='left',
+                        verticalalignment='center',
+                        bbox=dict(facecolor='black', alpha=0.5, pad=pad, linewidth=0))
+        plt.savefig('images/test_train_segm', dpi=300)
+        plt.show()
 
 def reshape_dataset(dataset):
     shp = dataset.shape

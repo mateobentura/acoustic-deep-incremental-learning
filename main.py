@@ -29,6 +29,7 @@ def main():
                             spacing=spacing, length=12,
                             l_var=2, lines=4*(55//spacing))
         test.finish()
+        plt.figure(figsize=(12*3,3*3))
         test.plot_label()
         plt.savefig('test_gen')
         plt.figure()
