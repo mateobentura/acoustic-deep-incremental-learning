@@ -6,3 +6,6 @@ weights/
 images/
 noise_test/
 test/
+main.py
+train_test.py
+*.png

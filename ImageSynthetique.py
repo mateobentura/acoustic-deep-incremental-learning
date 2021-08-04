@@ -337,7 +337,6 @@ class ImageSynthetique:
 
         return labels_resize
 
-
     def calssification_predict(self, model, ds_test, shape, threshold):
         predicted_labels = model.predict(ds_test.batch(32))
         predict = predicted_labels.reshape(shape)
@@ -404,9 +403,9 @@ class ImageSynthetique:
         img[tp] = 3.0
 
         lightgreen = np.array([5, 91, 252])/255.
-        darkred = np.array([153, 0, 0])/255.
-        darkgreen = np.array([255, 151, 15])/255.
-        lightred = np.array([255, 51, 51])/255.
+        darkred = np.array([237, 76, 2])/255.
+        lightred = np.array([255, 151, 15])/255.
+        darkgreen = np.array([0, 34, 147])/255.
 
         cmap = {0: lightgreen, 1: lightred, 2: darkred, 3: darkgreen}
         labels = {0: 'Vrai négatif', 2: 'Faux négatif', 1: 'Faux positif', 3: 'Vrai positif'}
