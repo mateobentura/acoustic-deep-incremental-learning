@@ -81,7 +81,7 @@ def segmentation_model(img_shape, classes=1, backbone='resnet34'):
                         encoder_weights='imagenet',
                         encoder_freeze=False)
     output = base_model(x)
-    base_model._name = 'Segmentation'
+    base_model._name = 'Unet'
     model = keras.Model(input, output, name=base_model.name)
     opt = keras.optimizers.Adam(learning_rate=0.1)
     model.compile(optimizer=opt, loss=sm.losses.bce_dice_loss, metrics=METRICS)
