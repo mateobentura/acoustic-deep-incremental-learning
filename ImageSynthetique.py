@@ -59,6 +59,7 @@ class ImageSynthetique:
         self.lines = []
         self.predicted = {}
         self.labels = {}
+        self.finished = False
 
     def _create_image(self, classes):
         """Generate canvas for image.
@@ -95,6 +96,7 @@ class ImageSynthetique:
     def finish(self):
         self.image = self._noisy(self.noise_lvl*255, self.seed)
         print('SNR: %.2fdB' % self._signaltonoise_dB())
+        self.finished = True
         pass
 
     def add_ladder(self, starting_pt, spacing, length, l_var, lines, seed=None):
@@ -194,13 +196,17 @@ class ImageSynthetique:
         self.segmentation[y_m:y_p, x_m:x_p, 1] = segmentation
         pass
 
-    def plot_label(self, with_coords=True):
+    def show(self, with_coords=True):
         """Plot image with labels, shows rectangle around objects and caracteristics.
 
          params:
             with_coords (bool): option to print out minimum and maximum coordinates.
         """
+        if self.finished == False:
+            self.finish()
+
         plt.figure(figsize=(self.figsize))
+        plt.title('Image synthétique avec labels et paramètres, SNR=%.2fdB' % self._signaltonoise_dB())
         plt.imshow(self.image, vmin=0, vmax=255)
         for o in self.objects:
             coords = o['coords']
@@ -216,7 +222,7 @@ class ImageSynthetique:
             if o['type'] == 'ladder':
                 if with_coords:
                     # Display minimum and maximum vertical coordinates
-                    text += 'y: ({}:{})\n'.format(*o['coords'][:][1])
+                    text += 'y: ({}:{})\n'.format(o['coords'][0][1], o['coords'][1][1])
                 # Display spacing in pixels
                 text += 'spacing: {} \n'.format(o['spacing'])
                 # Display length and max variation in length
@@ -466,23 +472,6 @@ class ImageSynthetique:
             labels = self.segmentation.reshape(-1)
             labels /= labels.max()
         cf_matrix = tf.math.confusion_matrix(labels, predicted).numpy()
-        # group_names = ["Vrai fond", "Fausse échelle", "Faux fond", "Vraie échelle"]
-        # group_counts = ["{0:0.0f}".format(value) for value in
-        #                 cf_matrix.flatten()]
-        # group_counts[-1] += ' ('+str(sum(cf_matrix[1, :]))+')'
-        # cf_labels = [f"{v1}\n{v2}" for v1, v2 in zip(group_names, group_counts)]
-        #
-        # cf_labels = np.asarray(cf_labels).reshape(2, 2)
-        #
-        # sns.heatmap(cf_matrix,
-        #             annot=cf_labels, fmt="",
-        #             cmap=['lightgray'], cbar=False,
-        #             linewidths=0.5, linecolor='black',
-        #             square=True,
-        #             xticklabels=['Fond', 'Échelle'], yticklabels=['Fond', 'Échelle'])
-        #
-        # plt.ylabel('Label réel')
-        # plt.xlabel('Label prédit')
         print(cf_matrix)
         sensibilite = cf_matrix[1, 1] / (cf_matrix[1, 1] + cf_matrix[1, 0])
         specificite = cf_matrix[0, 0] / (cf_matrix[0, 0] + cf_matrix[0, 1])
