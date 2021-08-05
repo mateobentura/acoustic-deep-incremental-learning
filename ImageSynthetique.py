@@ -141,7 +141,7 @@ class ImageSynthetique:
         rng = np.random.RandomState(seed)
         for line in range(lines):
             intensity = rng.rand()
-            intensity = int(intensity*(0.9-self.noise_lvl*2)*255 + min_intensity)
+            intensity = int(intensity*((0.9-self.noise_lvl*2)*255 - min_intensity) + min_intensity)
             # intensity = rng.randint(min_intensity, (0.9-self.noise_lvl*2)*255)
             thickness = rng.randint(times, 2*times)
             length_var = [rng.randint(-l_var*times, l_var*times), 0]
