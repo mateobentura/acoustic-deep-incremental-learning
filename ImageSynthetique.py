@@ -98,7 +98,7 @@ class ImageSynthetique:
             seed (int): optional seed that determines random state
         """
         np.random.seed(seed)
-        random = np.random.normal(loc=intensity*2,
+        random = np.random.normal(loc=intensity,
                                 scale=intensity,
                                 size=(self.height, self.width)).round()
         #self.image += random
@@ -140,7 +140,9 @@ class ImageSynthetique:
         min_intensity = 50
         rng = np.random.RandomState(seed)
         for line in range(lines):
-            intensity = rng.randint(min_intensity, 220)
+            intensity = rng.rand()
+            intensity = int(intensity*(0.9-self.noise_lvl*2)*255 + min_intensity)
+            # intensity = rng.randint(min_intensity, (0.9-self.noise_lvl*2)*255)
             thickness = rng.randint(times, 2*times)
             length_var = [rng.randint(-l_var*times, l_var*times), 0]
             # Create bars
