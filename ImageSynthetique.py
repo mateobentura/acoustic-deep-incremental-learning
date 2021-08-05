@@ -74,6 +74,14 @@ class ImageSynthetique:
         self.classes = classes
         pass
 
+    def clear(self):
+        self._create_image(self.classes)
+        self.objects = []
+        self.lines = []
+        self.predicted = {}
+        self.labels = {}
+        self.finished = False
+
     def _noisy(self, intensity, seed):
         """Add noise to blank image.
 
@@ -95,7 +103,6 @@ class ImageSynthetique:
 
     def finish(self):
         self.image = self._noisy(self.noise_lvl*255, self.seed)
-        print('SNR: %.2fdB' % self._signaltonoise_dB())
         self.finished = True
         pass
 
