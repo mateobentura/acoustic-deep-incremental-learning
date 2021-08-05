@@ -2,3 +2,10 @@ __pycache__/
 env/
 .mypy_cache
 weights/
+*.h5
+images/
+noise_test/
+test/
+main.py
+train_test.py
+*.png
