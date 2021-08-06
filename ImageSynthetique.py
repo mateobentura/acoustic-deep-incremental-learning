@@ -1,4 +1,3 @@
-
 import matplotlib.patches as patches
 import time
 import tensorflow as tf
@@ -60,12 +59,8 @@ class ImageSynthetique:
         self.figsize = ((width+60)/40, height/40)
         self.noise_lvl = noise_lvl
         self.seed = seed
-        self._create_image(classes)
-        self.objects = []
-        self.lines = []
-        self.predicted = {}
-        self.labels = {}
-        self.finished = False
+        self.classes = classes
+        self._create_image(self.classes)
 
     def _create_image(self, classes):
         """Generate canvas for image.
@@ -76,19 +71,16 @@ class ImageSynthetique:
         """
         self.image = np.zeros((self.height, self.width), np.float32)
         self.mask = np.zeros((self.height, self.width), np.uint8)
-        self.segmentation = np.zeros(self.mask.shape+(classes,))
-        self.classes = classes
+        self.segmentation = np.zeros(self.mask.shape+(self.classes,))
         self.mask = np.zeros((self.height, self.width, self.classes), np.uint8)
         self.segmentation = np.zeros_like(self.mask)
-        pass
+        self.objects, self.lines = [], []
+        self.predicted, self.labels = {}, {}
+        self.finished = False
+        self.sliding = False
 
     def clear(self):
         self._create_image(self.classes)
-        self.objects = []
-        self.lines = []
-        self.predicted = {}
-        self.labels = {}
-        self.finished = False
 
     def _noisy(self, intensity, seed):
         """Add noise to blank image.
@@ -141,8 +133,7 @@ class ImageSynthetique:
         rng = np.random.RandomState(seed)
         for line in range(lines):
             intensity = rng.rand()
-            intensity = int(intensity*((0.9-self.noise_lvl*2)*255 - min_intensity) + min_intensity)
-            # intensity = rng.randint(min_intensity, (0.9-self.noise_lvl*2)*255)
+            intensity = rng.randint(min_intensity, (0.6*255))
             thickness = rng.randint(times, 2*times)
             length_var = [rng.randint(-l_var*times, l_var*times), 0]
             # Create bars
@@ -356,26 +347,27 @@ class ImageSynthetique:
         pass
 
 
-    def sliding_window(self, window_size, pad_h, pad_v, network='classif'):
+    def sliding_window(self, window_size, step_h, step_v, network='classif'):
+        self.sliding = True
         self.window_size = window_size
-        self.pad_h, self.pad_v = (pad_h, pad_v)
-        windows_h = (self.width - window_size) // pad_h +1
-        windows_v = (self.height - window_size) // pad_v +1
+        self.step_h, self.step_v = (step_h, step_v)
+        windows_h = (self.width - window_size) // step_h +1
+        windows_v = (self.height - window_size) // step_v +1
         # self.crops = np.zeros((windows_v, windows_h, window_size, window_size, 1))
         # self.labels['segm'] = np.zeros((windows_v, windows_h, window_size, window_size, self.classes+1))
         maximum = self.mask.max()
-        self.crops = view_as_windows(self.image, window_size, step=(pad_h,pad_v))
-        self.labels['segm'] = view_as_windows(self.segmentation, (window_size,window_size, self.classes), step=(pad_h,pad_v, 1)).squeeze()
+        self.crops = view_as_windows(self.image, window_size, step=(step_h,step_v))
+        self.labels['segm'] = view_as_windows(self.segmentation, (window_size, window_size, self.classes), step=(step_h,step_v, 1)).squeeze()
         self.labels['segm'] = np.expand_dims(self.labels['segm'], axis=-1)
 
-        self.labels['classif'] = (view_as_windows(self.mask, window_size, step=(pad_h,pad_v)).squeeze()>0)
+        self.labels['classif'] = (view_as_windows(self.mask, (window_size, window_size, self.classes), step=(step_h,step_v, 1)).squeeze()>0)
         self.labels['classif'] = self.labels['classif'].any(axis=(-2,-1)).astype(int)
         crops = self.crops.reshape(-1, 32, 32, 1)
         if network == 'classif':
             classif = keras.utils.to_categorical(self.labels['classif'].reshape(-1), self.classes+1)
             return crops, classif
         elif network == 'segm':
-            segm = view_as_windows(self.segmentation, (window_size,window_size, self.classes), step=(pad_h,pad_v, 1)).squeeze()
+            segm = view_as_windows(self.segmentation, (window_size,window_size, self.classes), step=(step_h,step_v, 1)).squeeze()
             segm = np.expand_dims(segm, axis=-1)
             return crops, segm
 
@@ -422,16 +414,16 @@ class ImageSynthetique:
             left=False,
             grid_color='black',
             grid_alpha=0.1)
-        ax.set_xticks(np.arange(0, self.width, self.pad_h), minor=True)
-        ax.set_yticks(np.arange(0, self.height, self.pad_v), minor=True)
-        ax.set_xticks(np.arange(0, self.width, self.pad_h*4))
-        ax.set_yticks(np.arange(0, self.height, self.pad_v*4))
+        ax.set_xticks(np.arange(0, self.width, self.step_h), minor=True)
+        ax.set_yticks(np.arange(0, self.height, self.step_v), minor=True)
+        ax.set_xticks(np.arange(0, self.width, self.step_h*4))
+        ax.set_yticks(np.arange(0, self.height, self.step_v*4))
         plt.title('Zones labellisées, avec un seuil de '+str(threshold))
         plt.imshow(self.mask, vmin=0, vmax=255)
         plt.imshow(self.predicted['classif'], vmin=0, vmax=1, alpha=0.5)
 
         # pairs = np.array(np.where(resampled_labels>0)).transpose()[:,[1, 0]]
-        # new_points = np.array([element*[self.pad_h,self.pad_v]+[self.window_size//2, self.window_size//2] for element in pairs ])
+        # new_points = np.array([element*[self.step_h,self.step_v]+[self.window_size//2, self.window_size//2] for element in pairs ])
         # plt.scatter(new_points[:,0],new_points[:,1], s=1)
         # And a corresponding grid
         ax.grid(which='both')
@@ -445,8 +437,8 @@ class ImageSynthetique:
         obj = np.array(np.where(labels>0))
         pairs = obj.transpose()[:,[1, 0]]
         for pair in pairs:
-            start = tuple((pair-1)*[self.pad_h,self.pad_v]+self.window_size//2+[self.pad_h//2,self.pad_v//2])
-            end = tuple((pair)*[self.pad_h,self.pad_v]+self.window_size//2+[self.pad_h//2,self.pad_v//2])
+            start = tuple((pair-1)*[self.step_h,self.step_v]+self.window_size//2+[self.step_h//2,self.step_v//2])
+            end = tuple((pair)*[self.step_h,self.step_v]+self.window_size//2+[self.step_h//2,self.step_v//2])
             pair = (pair[1], pair[0])
             labels_resize = cv2.rectangle(labels_resize, start, end, 1, -1)
 
@@ -460,9 +452,9 @@ class ImageSynthetique:
         plt.subplot(121)
         for obj in self.objects:
             coords = obj['coords']
-            pt = (coords[0][0]/self.pad_h, coords[0][1]/self.pad_v)
+            pt = (coords[0][0]/self.step_h, coords[0][1]/self.step_v)
             h = coords[1][1] - coords[0][1]
-            h /= self.pad_v
+            h /= self.step_v
             if obj['type'] == 'ladder':
                 text = 'spacing: '+str(obj['spacing'])
             elif obj['type'] == 'disk':
@@ -554,8 +546,8 @@ class ImageSynthetique:
             grid_color='black',
             grid_alpha=0.1)
 
-        ax.set_xticks(np.arange(0, self.width, self.pad_h))
-        ax.set_yticks(np.arange(0, self.height, self.pad_v))
+        ax.set_xticks(np.arange(0, self.width, self.step_h))
+        ax.set_yticks(np.arange(0, self.height, self.step_v))
         img = np.copy(self.predicted['classif'])
         img[self.predicted['segm']>0] = 2.0
         t = 1 ## alpha value
@@ -597,10 +589,12 @@ class ImageSynthetique:
         return [classif, segm]
 
     def test_train(self, classification_model, segmentation_model, learn=False, threshold=0.9):
-        if self.pad_h != 32:
-            self.sliding_window(32,32,32,0.9)
+        if not self.sliding:
+            self.sliding_window(32,32,32)
+        elif self.step_h != 32:
+            self.sliding_window(32,32,32)
         var_time = timing()
-        print('Testing with classification model')
+        print('Test avec le modèle classification')
         y_pred = classification_model.predict(self.crops.reshape(-1,32,32,1))
         y_pred = np.reshape(y_pred, self.crops.shape[:2]+(2,))
         indexes = np.where(y_pred>threshold)[:2]
@@ -609,6 +603,7 @@ class ImageSynthetique:
         unsupervised_labels = np.argmax(y_pred[indexes], axis=-1)
         mask[indexes] = unsupervised_labels + 2
         plt.figure(figsize=self.figsize)
+        plt.title('Prédiction du réseau de classification')
         cmap = {0:[0.8,0.8,1.0,1], 1:[1,0.4,1,1], 2:[0.3,0.3,1.0,1], 3:[0.5,0.1,0.3,1]}
         labels = {0:'Fond (faible)', 1: 'Échelle (faible)', 2:'Fond détecté', 3:' Échelle détectée'}
         arrayShow = np.array([[cmap[i] for i in j] for j in mask])
@@ -637,6 +632,7 @@ class ImageSynthetique:
         mask = mask.reshape(self.height//32, self.width//32, 32, 32, 1)
         mask = mask.swapaxes(1, 2)
         mask = mask.reshape((self.height//32)*32, (self.width//32)*32,1)
+        plt.title('Prédiction du réseau de sesegmentation')
         plt.imshow(mask[:,:,0])
         text = ''
         for i,name in enumerate(segmentation_model.metrics_names):
