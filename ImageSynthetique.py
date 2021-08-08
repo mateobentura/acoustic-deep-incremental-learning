@@ -445,12 +445,24 @@ class ImageSynthetique:
         return labels_resize
 
     def calssification_predict(self, model, threshold):
-        ds_test = self.crops_to_dataset(step=32, shuffle=False)
-        predicted_labels = model.predict(ds_test.batch(32))
-        predict = predicted_labels.reshape(shape)
         self.predicted['classif'] = np.where(predict > threshold, 1, 0)
-        plt.figure(figsize=(20, 5))
-        plt.subplot(121)
+        y_pred = classification_model.predict(self.crops.reshape(-1,32,32,1))
+        y_pred = np.reshape(y_pred, self.crops.shape[:2]+(2,))
+        indexes = np.where(y_pred>threshold)[:2]
+        classified_crops = np.expand_dims(self.crops[indexes], axis=-1)
+        mask = np.argmax(y_pred, axis=-1)
+        unsupervised_labels = np.argmax(y_pred[indexes], axis=-1)
+        mask[indexes] = unsupervised_labels + 2
+        plt.figure(figsize=self.figsize)
+        plt.title('Prédiction du réseau de classification')
+        cmap = {0:[0.8,0.8,1.0,1], 1:[1,0.4,1,1], 2:[0.3,0.3,1.0,1], 3:[0.5,0.1,0.3,1]}
+        labels = {0:'Fond (faible)', 1: 'Échelle (faible)', 2:'Fond détecté', 3:' Échelle détectée'}
+        arrayShow = np.array([[cmap[i] for i in j] for j in mask])
+        patches_ =[patches.Patch(color=cmap[i],label=labels[i]) for i in cmap]
+        plt.imshow(arrayShow)
+        plt.legend(handles=patches_, loc=4, borderaxespad=0.)
+        # plt.figure(figsize=(20, 5))
+        # plt.subplot(121)
         for obj in self.objects:
             coords = obj['coords']
             pt = (coords[0][0]/self.step_h, coords[0][1]/self.step_v)
@@ -466,11 +478,12 @@ class ImageSynthetique:
                                     verticalalignment='top',
                                     bbox=dict(facecolor='black', alpha=0.5, linewidth=0))
 
-        plt.imshow(predict, vmin=0, vmax=1)
-        plt.subplot(122)
-        plt.imshow(self.predicted['classif'], vmin=0, vmax=1)
-        plt.yticks([])
-        pass
+        # plt.imshow(predict, vmin=0, vmax=1)
+        plt.savefig('images/test_train_classif')
+        # plt.subplot(122)
+        # plt.imshow(self.predicted['classif'], vmin=0, vmax=1)
+        # plt.yticks([])
+        return classified_crops, unsupervised_labels
 
 
     def segmentation_predict(self, model, crops, threshold):
@@ -595,24 +608,8 @@ class ImageSynthetique:
         elif self.step_h != 32:
             self.sliding_window(32,32,32)
         var_time = timing()
+        classified_crops, unsupervised_labels = self.classification_predict(classification_model, threshold)
         print('Test avec le modèle classification')
-        y_pred = classification_model.predict(self.crops.reshape(-1,32,32,1))
-        y_pred = np.reshape(y_pred, self.crops.shape[:2]+(2,))
-        indexes = np.where(y_pred>threshold)[:2]
-        classified_crops = np.expand_dims(self.crops[indexes], axis=-1)
-        mask = np.argmax(y_pred, axis=-1)
-        unsupervised_labels = np.argmax(y_pred[indexes], axis=-1)
-        mask[indexes] = unsupervised_labels + 2
-        plt.figure(figsize=self.figsize)
-        plt.title('Prédiction du réseau de classification')
-        cmap = {0:[0.8,0.8,1.0,1], 1:[1,0.4,1,1], 2:[0.3,0.3,1.0,1], 3:[0.5,0.1,0.3,1]}
-        labels = {0:'Fond (faible)', 1: 'Échelle (faible)', 2:'Fond détecté', 3:' Échelle détectée'}
-        arrayShow = np.array([[cmap[i] for i in j] for j in mask])
-        ## create patches as legend
-        patches_ =[patches.Patch(color=cmap[i],label=labels[i]) for i in cmap]
-        plt.imshow(arrayShow)
-        plt.legend(handles=patches_, loc=4, borderaxespad=0.)
-        plt.savefig('images/test_train_classif')
         print('Exemples avec une réponse forte: {}'.format(classified_crops.shape[0]))
         plt.show()
         if learn:
