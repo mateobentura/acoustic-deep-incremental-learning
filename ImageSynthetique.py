@@ -371,8 +371,8 @@ class ImageSynthetique:
             segm = np.expand_dims(segm, axis=-1)
             return crops, segm
 
-    def crops_to_dataset(self, batch_size=32, network='classif', balanced=False, split=False, shuffle=True):
-        ds = tf.data.Dataset.from_tensor_slices(self.sliding_window(32, 1, 1, network=network))
+    def crops_to_dataset(self, batch_size=32, network='classif', step=1, balanced=False, split=False, shuffle=True):
+        ds = tf.data.Dataset.from_tensor_slices(self.sliding_window(32, step, step, network=network))
         ds_size = len(ds)
         if shuffle:
             ds = ds.shuffle(ds_size)
@@ -444,7 +444,8 @@ class ImageSynthetique:
 
         return labels_resize
 
-    def calssification_predict(self, model, ds_test, shape, threshold):
+    def calssification_predict(self, model, threshold):
+        ds_test = self.crops_to_dataset(step=32, shuffle=False)
         predicted_labels = model.predict(ds_test.batch(32))
         predict = predicted_labels.reshape(shape)
         self.predicted['classif'] = np.where(predict > threshold, 1, 0)
