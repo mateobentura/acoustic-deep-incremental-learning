@@ -613,7 +613,7 @@ class ImageSynthetique:
         plt.show()
         if learn:
             print('Updating network with new examples')
-            unsupervised_labels = keras.utils.to_categorical(unsupervised_labels, y_pred.shape[-1])
+            unsupervised_labels = keras.utils.to_categorical(unsupervised_labels, self.classes+1)
             classification_model.fit(classified_crops, unsupervised_labels, epochs=2)
             var_time = timing('classification training', var_time)
 
