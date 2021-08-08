@@ -444,7 +444,7 @@ class ImageSynthetique:
 
         return labels_resize
 
-    def clssification_predict(self, model, threshold):
+    def classification_predict(self, model, threshold):
         self.predicted['classif'] = np.where(predict > threshold, 1, 0)
         y_pred = classification_model.predict(self.crops.reshape(-1,32,32,1))
         y_pred = np.reshape(y_pred, self.crops.shape[:2]+(2,))
