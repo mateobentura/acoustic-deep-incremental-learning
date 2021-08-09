@@ -132,8 +132,7 @@ class ImageSynthetique:
         min_intensity = 50
         rng = np.random.RandomState(seed)
         for line in range(lines):
-            intensity = rng.rand()
-            intensity = rng.randint(min_intensity, (0.6*255))
+            intensity = rng.randint(min_intensity, (0.8*255))
             thickness = rng.randint(times, 2*times)
             length_var = [rng.randint(-l_var*times, l_var*times), 0]
             # Create bars
@@ -610,11 +609,10 @@ class ImageSynthetique:
         classified_crops, unsupervised_labels = self.classification_predict(classification_model, threshold)
         print('Test avec le modèle classification')
         print('Exemples avec une réponse forte: {}'.format(classified_crops.shape[0]))
-        plt.show()
         if learn:
             print('Updating network with new examples')
             unsupervised_labels = keras.utils.to_categorical(unsupervised_labels, self.classes+1)
-            classification_model.fit(classified_crops, unsupervised_labels, epochs=2)
+            classification_model.fit(classified_crops, unsupervised_labels)
             var_time = timing('classification training', var_time)
 
         # print('Training segmentation model')
