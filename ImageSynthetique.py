@@ -91,14 +91,14 @@ class ImageSynthetique:
         """
         np.random.seed(seed)
         random = np.random.normal(loc=intensity,
-                                scale=intensity,
+                                scale=intensity/2,
                                 size=(self.height, self.width)).round()
         #self.image += random
         return np.clip(self.image + random, 0, 255)
 
     def _signaltonoise_dB(self, axis=-1, ddof=0):
         m = self.image.mean()
-        sd = self.noise_lvl*255
+        sd = self.noise_lvl/2*255
         return 20*np.log10(m/sd)
 
     def finish(self):
@@ -146,7 +146,7 @@ class ImageSynthetique:
             end[1] += spacing
         self.lines[-1] //= times
         rect_bottom = tuple((end-[0, spacing])//times+[l_var, 2])
-        self.mask[0] = cv2.rectangle(self.mask[0], rect_top, rect_bottom, 255, -1)
+        self.mask[:,:,0] = cv2.rectangle(self.mask[0], rect_top, rect_bottom, 255, -1)
 
         image_resize = cv2.resize(big_image, (self.width, self.height))
         segmentation = image_resize.copy().astype(np.uint8)
@@ -366,9 +366,7 @@ class ImageSynthetique:
             classif = keras.utils.to_categorical(self.labels['classif'].reshape(-1), self.classes+1)
             return crops, classif
         elif network == 'segm':
-            segm = view_as_windows(self.segmentation, (window_size,window_size, self.classes), step=(step_h,step_v, 1)).squeeze()
-            segm = np.expand_dims(segm, axis=-1)
-            return crops, segm
+            return crops, slef.labels['segm']
 
     def crops_to_dataset(self, batch_size=32, network='classif', step=1, balanced=False, split=False, shuffle=True):
         ds = tf.data.Dataset.from_tensor_slices(self.sliding_window(32, step, step, network=network))
