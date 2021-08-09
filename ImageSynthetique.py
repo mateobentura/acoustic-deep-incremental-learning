@@ -478,6 +478,7 @@ class ImageSynthetique:
 
         # plt.imshow(predict, vmin=0, vmax=1)
         plt.savefig('images/test_train_classif')
+        plt.show()
         # plt.subplot(122)
         # plt.imshow(self.predicted['classif'], vmin=0, vmax=1)
         # plt.yticks([])
