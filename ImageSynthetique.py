@@ -146,7 +146,7 @@ class ImageSynthetique:
             end[1] += spacing
         self.lines[-1] //= times
         rect_bottom = tuple((end-[0, spacing])//times+[l_var, 2])
-        self.mask[:,:,0] = cv2.rectangle(self.mask[0], rect_top, rect_bottom, 255, -1)
+        self.mask[:,:,0] = cv2.rectangle(self.mask[:,:,0], rect_top, rect_bottom, 255, -1)
 
         image_resize = cv2.resize(big_image, (self.width, self.height))
         segmentation = image_resize.copy().astype(np.uint8)
@@ -354,7 +354,6 @@ class ImageSynthetique:
         windows_v = (self.height - window_size) // step_v +1
         # self.crops = np.zeros((windows_v, windows_h, window_size, window_size, 1))
         # self.labels['segm'] = np.zeros((windows_v, windows_h, window_size, window_size, self.classes+1))
-        maximum = self.mask.max()
         self.crops = view_as_windows(self.image, window_size, step=(step_h,step_v))
         self.labels['segm'] = view_as_windows(self.segmentation, (window_size, window_size, self.classes), step=(step_h,step_v, 1)).squeeze()
         self.labels['segm'] = np.expand_dims(self.labels['segm'], axis=-1)
