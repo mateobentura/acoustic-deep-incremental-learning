@@ -418,9 +418,6 @@ class ImageSynthetique:
         plt.imshow(self.mask, vmin=0, vmax=255)
         plt.imshow(self.predicted['classif'], vmin=0, vmax=1, alpha=0.5)
 
-        # pairs = np.array(np.where(resampled_labels>0)).transpose()[:,[1, 0]]
-        # new_points = np.array([element*[self.step_h,self.step_v]+[self.window_size//2, self.window_size//2] for element in pairs ])
-        # plt.scatter(new_points[:,0],new_points[:,1], s=1)
         # And a corresponding grid
         ax.grid(which='both')
         # ax.grid(which='minor', alpha=0.5, color='black')
@@ -444,6 +441,7 @@ class ImageSynthetique:
         y_pred = model.predict(self.crops.reshape(-1,32,32,1))
         y_pred = np.reshape(y_pred, self.crops.shape[:2]+(2,))
         indexes = np.where(y_pred>threshold)[:2]
+        self.predicted['classif'] = np.where(predicted_image > threshold, 1, 0)
         classified_crops = np.expand_dims(self.crops[indexes], axis=-1)
         mask = np.argmax(y_pred, axis=-1)
         unsupervised_labels = np.argmax(y_pred[indexes], axis=-1)
@@ -456,8 +454,6 @@ class ImageSynthetique:
         patches_ =[patches.Patch(color=cmap[i],label=labels[i]) for i in cmap]
         plt.imshow(arrayShow)
         plt.legend(handles=patches_, loc=4, borderaxespad=0.)
-        # plt.figure(figsize=(20, 5))
-        # plt.subplot(121)
         for obj in self.objects:
             coords = obj['coords']
             pt = (coords[0][0]/self.step_h, coords[0][1]/self.step_v)
@@ -473,12 +469,8 @@ class ImageSynthetique:
                                     verticalalignment='top',
                                     bbox=dict(facecolor='black', alpha=0.5, linewidth=0))
 
-        # plt.imshow(predict, vmin=0, vmax=1)
         plt.savefig('images/test_train_classif')
         plt.show()
-        # plt.subplot(122)
-        # plt.imshow(self.predicted['classif'], vmin=0, vmax=1)
-        # plt.yticks([])
         return classified_crops, unsupervised_labels
 
 
@@ -505,8 +497,6 @@ class ImageSynthetique:
         self.predicted['segm'] = np.where(predicted_image > threshold, 1, 0)
         plt.figure(figsize=self.figsize)
         ax = plt.gca()
-        # plt.imshow(self.predicted['segm'])
-        # plt.imshow(self.segmentation, alpha=0.5)
         plt.xticks(np.arange(0,self.width, 32))
         plt.yticks(np.arange(0,self.height, 32))
         img = np.zeros_like(self.image)
@@ -529,7 +519,6 @@ class ImageSynthetique:
         arrayShow = np.array([[cmap[i] for i in j] for j in img])
         # create patches as legend
         patches_ =[patches.Patch(color=cmap[i], label=labels[i]) for i in cmap]
-        # plt.imshow(segm)
         plt.imshow(arrayShow)
         plt.legend(handles=patches_, loc=4, borderaxespad=0.)
 
@@ -613,8 +602,6 @@ class ImageSynthetique:
             classification_model.fit(classified_crops, unsupervised_labels)
             var_time = timing('classification training', var_time)
 
-        # print('Training segmentation model')
-        #plt.imshow(datagen_s.mask)
         var_time = timing('segmentation training')
         results = segmentation_model.evaluate(self.crops.reshape(-1,32,32,1), self.labels['segm'].reshape(-1,32,32,1)/255, verbose=0)
         y_pred = segmentation_model.predict(self.crops.reshape(-1,32,32,1))
