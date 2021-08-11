@@ -62,12 +62,12 @@ def classification_model(img_shape, classes=1, dropout=False):
     if dropout: x = keras.layers.Dropout(0.7)(x)
     x = keras.layers.Dense(256, activation='relu')(x)
     if dropout: x = keras.layers.Dropout(0.7)(x)
-    output = keras.layers.Dense(classes+1, name='Classification', activation='softmax')(x)
+    output = keras.layers.Dense(classes+1, name='Classification', activation='sigmoid')(x)
     model = keras.Model(input, output)
 
     opt = keras.optimizers.Adam(learning_rate=1e-5)
     #loss = keras.losses.CategoricalCrossentropy()
-    model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=METRICS)
+    model.compile(loss='binary_crossentropy', optimizer=opt, metrics=METRICS)
     return model
 
 

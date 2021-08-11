@@ -438,10 +438,12 @@ class ImageSynthetique:
         return labels_resize
 
     def classification_predict(self, model, threshold):
+        if not self.sliding:
+            self.training(32, 32, 32)
         y_pred = model.predict(self.crops.reshape(-1,32,32,1))
         y_pred = np.reshape(y_pred, self.crops.shape[:2]+(2,))
         indexes = np.where(y_pred>threshold)[:2]
-        self.predicted['classif'] = np.where(predicted_image > threshold, 1, 0)
+        self.predicted['classif'] = np.where(y_pred > threshold, 1, 0)
         classified_crops = np.expand_dims(self.crops[indexes], axis=-1)
         mask = np.argmax(y_pred, axis=-1)
         unsupervised_labels = np.argmax(y_pred[indexes], axis=-1)
